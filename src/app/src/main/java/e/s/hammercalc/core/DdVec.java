@@ -2,10 +2,7 @@ package e.s.hammercalc.core;
 
 import java.util.Arrays;
 import java.util.ConcurrentModificationException;
-import java.util.List;
-
-// IEB: Rewrite this to be less jumbled
-
+import java.util.NoSuchElementException;
 
 /**
  * Resizable-array dequeue for double valued items.
@@ -23,7 +20,7 @@ public class DdVec {
      * other.  We also guarantee that all array cells not holding
      * deque elements are always null.
      */
-    transient double[] elements; // non-private to simplify nested class access
+    transient Double[] elements; // non-private to simplify nested class access
 
     /**
      * The index of the element at the head of the deque (which is the
@@ -67,7 +64,7 @@ public class DdVec {
             if (initialCapacity < 0)    // Too many elements, must back off
                 initialCapacity >>>= 1; // Good luck allocating 2^30 elements
         }
-        elements = new double[initialCapacity];
+        elements = new Double[initialCapacity];
     }
 
     /**
@@ -82,18 +79,24 @@ public class DdVec {
         int newCapacity = n << 1;
         if (newCapacity < 0)
             throw new IllegalStateException("Sorry, deque too big");
-        double[] a = new double[newCapacity];
+        Double[] a = new Double[newCapacity];
         System.arraycopy(elements, p, a, 0, r);
         System.arraycopy(elements, 0, a, r, p);
         // Android-added: Clear old array instance that's about to become eligible for GC.
         // This ensures that array elements can be eligible for garbage collection even
         // before the array itself is recognized as being eligible; the latter might
         // take a while in some GC implementations, if the array instance is longer lived
-        // (its liveness rarely checked) than some of its contents.
-        Arrays.fill(elements, 0);
+        // (its live-ness rarely checked) than some of its contents.
+        Arrays.fill(elements, null);
         elements = a;
         head = 0;
         tail = n;
+    }
+
+    public static DdVec FromDouble(double v){
+        DdVec result = new DdVec();
+        result.addLast(v);
+        return result;
     }
 
     /**
@@ -101,7 +104,7 @@ public class DdVec {
      * sufficient to hold 16 elements.
      */
     public DdVec() {
-        elements = new double[16];
+        elements = new Double[16];
     }
 
     /**
@@ -126,7 +129,7 @@ public class DdVec {
      */
     public DdVec(double[] c) {
         allocateElements(c.length);
-        for (double d : c) push(d);
+        for (double d : c) addLast(d);
     }
 
     // The main insertion and extraction methods are addFirst,
@@ -135,89 +138,98 @@ public class DdVec {
 
     /**
      * Inserts the specified element at the front of this deque.
-     * Same as 'unshift' in JS
+     *
+     * @param e the element to add
+     * @throws NullPointerException if the specified element is null
      */
-    public void insert(double e) {
-        // Note, this starts at the highest index. So `new(); insert(1); insert(2)` would look like [0,...,0, 2.0, 1.0]
+    public void addFirst(double e) {
         elements[head = (head - 1) & (elements.length - 1)] = e;
-        if (head == tail)
-            doubleCapacity();
+        if (head == tail) doubleCapacity();
     }
 
     /**
      * Inserts the specified element at the end of this deque.
      */
-    public void push(double e) {
-        // Note, this starts at the lowest index. So `new(); push(1); push(2)` would look like [1.0, 2.0, 0,...,0]
+    public void addLast(double e) {
         elements[tail] = e;
-        if ((tail = (tail + 1) & (elements.length - 1)) == head)
+        if ( (tail = (tail + 1) & (elements.length - 1)) == head)
             doubleCapacity();
     }
 
     /**
-     * Read, return and remove the element at the head. Returns NaN if empty
+     * @throws NoSuchElementException {@inheritDoc}
      */
-    public double pollFirst() {
-        if (head == tail) return Double.NaN;
-        final double[] elements = this.elements;
+    public double removeFirst() {
+        Double x = pollFirst();
+        if (x == null) throw new NoSuchElementException();
+        return x;
+    }
+
+    /**
+     * @throws NoSuchElementException {@inheritDoc}
+     */
+    public double removeLast() {
+        Double x = pollLast();
+        if (x == null) throw new NoSuchElementException();
+        return x;
+    }
+
+    private Double pollFirst() {
+        final Double[] elements = this.elements;
         final int h = head;
-        double result = elements[h];
-        elements[h] = 0; // Must null out slot
-        head = (h + 1) & (elements.length - 1);
+        Double result = elements[h];
+        // Element is null if deque empty
+        if (result != null) {
+            elements[h] = null; // Must null out slot
+            head = (h + 1) & (elements.length - 1);
+        }
         return result;
     }
 
-    /**
-     * Read, return and remove the element at the tail. Returns NaN if empty
-     */
-    public double pollLast() {
-        if (head == tail) return Double.NaN;
-        final double[] elements = this.elements;
+    private Double pollLast() {
+        final Double[] elements = this.elements;
         final int t = (tail - 1) & (elements.length - 1);
-        double result = elements[t];
-        elements[t] = 0;
-        tail = t;
+        Double result = elements[t];
+        if (result != null) {
+            elements[t] = null;
+            tail = t;
+        }
         return result;
     }
 
     /**
-     * return but do not remove element at the head
+     * Read but don't remove first item
+     * @throws NoSuchElementException {@inheritDoc}
      */
-    public double peekFirst() {
-        return elements[head];
+    public double getFirst() {
+        Double result = elements[head];
+        if (result == null) throw new NoSuchElementException();
+        return result;
     }
 
     /**
-     * return but do not remove element at the head
+     * Read but don't remove last item
+     * @throws NoSuchElementException {@inheritDoc}
      */
-    public double peekLast() {
-        return elements[(tail - 1) & (elements.length - 1)];
+    public double getLast() {
+        Double result = elements[(tail - 1) & (elements.length - 1)];
+        if (result == null) throw new NoSuchElementException();
+        return result;
     }
 
-    /**
-     * Pops an element from the the start of the Vector
-     */
-    public double pop() {
-        return pollLast();
-    }
 
     /**
      * Removes the element at the specified position in the elements array,
      * adjusting head and tail as necessary.  This can result in motion of
      * elements backwards or forwards in the array.
-     *
-     * <p>This method is called delete rather than remove to emphasize
-     * that its semantics differ from those of {@link List#remove(int)}.
-     *
-     * @return true if elements moved backwards
      */
-    boolean delete(int i) {
-        final double[] elements = this.elements;
+    public void delete(int i) {
+        final Double[] elements = this.elements;
         final int mask = elements.length - 1;
         final int h = head;
         final int t = tail;
         final int front = (i - h) & mask;
-        final int back = (t - i) & mask;
+        final int back  = (t - i) & mask;
 
         // Invariant: head <= i < tail mod circularity
         if (front >= ((t - h) & mask))
@@ -232,9 +244,8 @@ public class DdVec {
                 elements[0] = elements[mask];
                 System.arraycopy(elements, h, elements, h + 1, mask - h);
             }
-            elements[h] = 0;
+            elements[h] = null;
             head = (h + 1) & mask;
-            return false;
         } else {
             if (i < t) { // Copy the null tail as well
                 System.arraycopy(elements, i + 1, elements, i, back);
@@ -245,7 +256,6 @@ public class DdVec {
                 System.arraycopy(elements, 1, elements, 0, t);
                 tail = (t - 1) & mask;
             }
-            return true;
         }
     }
 
@@ -253,25 +263,28 @@ public class DdVec {
 
     /**
      * Returns the number of elements in this deque.
+     *
+     * @return the number of elements in this deque
      */
     public int size() {
         return (tail - head) & (elements.length - 1);
     }
 
     /**
-     * Returns the number of elements in this deque.
-     */
-    public int length() {
-        return (tail - head) & (elements.length - 1);
-    }
-
-    /**
      * Returns {@code true} if this deque contains no elements.
+     *
+     * @return {@code true} if this deque contains no elements
      */
     public boolean isEmpty() {
         return head == tail;
     }
 
+    /**
+     * Returns {@code false} if this deque contains no elements.
+     */
+    public boolean notEmpty() {
+        return head != tail;
+    }
 
     /**
      * Removes all of the elements from this deque.
@@ -285,7 +298,7 @@ public class DdVec {
             int i = h;
             int mask = elements.length - 1;
             do {
-                elements[i] = 0;
+                elements[i] = null;
                 i = (i + 1) & mask;
             } while (i != t);
         }
@@ -298,17 +311,33 @@ public class DdVec {
      * <p>The returned array will be "safe" in that no references to it are
      * maintained by this deque.  (In other words, this method must allocate
      * a new array).  The caller is thus free to modify the returned array.
+     *
+     * <p>This method acts as bridge between array-based and collection-based
+     * APIs.
+     *
+     * @return an array containing all of the elements in this deque
      */
     public double[] toArray() {
         final int head = this.head;
         final int tail = this.tail;
         boolean wrap = (tail < head);
         int end = wrap ? tail + elements.length : tail;
-        double[] a = Arrays.copyOfRange(elements, head, end);
+        Double[] a = Arrays.copyOfRange(elements, head, end);
         if (wrap) System.arraycopy(elements, 0, a, elements.length - head, tail);
-        return a;
+
+        double[] result = new double[a.length];
+        for (int i = 0; i < a.length; i++) result[i] = a[i];
+        return result;
     }
 
+    // *** Array-like Methods ***
+
+    /**
+     * Returns the number of elements in this deque.
+     */
+    public int length() {
+        return (tail - head) & (elements.length - 1);
+    }
 
     /** set the value at the given index */
     public void set(int index, double value) {
@@ -318,13 +347,13 @@ public class DdVec {
         final int head = this.head;
         final int tail = this.tail;
 
-        if (head > tail) { // elements are all in order
-            elements[index + tail] = value;
+        if (head < tail) {
+            elements[index + head] = value;
             return;
         }
 
-        int rIdx = (elements.length - 1) - tail; // 'real' index at end of array
-        if (index <= rIdx) elements[index + tail] = value; // it's on the 'right' side of array
+        int rIdx = (elements.length - 1) - head; // 'real' index at end of array
+        if (index <= rIdx) elements[index + head] = value; // it's on the 'right' side of array
         else elements[index - (rIdx + 1)] = value;// index is wrapped
     }
 
@@ -336,13 +365,13 @@ public class DdVec {
         final int head = this.head;
         final int tail = this.tail;
 
-        if (head > tail) { // elements are all in order
-            elements[index + tail] += v;
+        if (head < tail) {
+            elements[index + head] += v;
             return;
         }
 
-        int rIdx = (elements.length - 1) - tail; // 'real' index at end of array
-        if (index <= rIdx) elements[index + tail] += v; // it's on the 'right' side of array
+        int rIdx = (elements.length - 1) - head; // 'real' index at end of array
+        if (index <= rIdx) elements[index + head] += v; // it's on the 'right' side of array
         else elements[index - (rIdx + 1)] += v;// index is wrapped
     }
 
@@ -362,10 +391,10 @@ public class DdVec {
         final int head = this.head;
         final int tail = this.tail;
 
-        if (head > tail) return elements[index + tail];
+        if (head < tail) return elements[index + head];
 
-        int rIdx = (elements.length - 1) - tail; // 'real' index at end of array
-        if (index <= rIdx) return elements[index + tail]; // it's on the 'right' side of array
+        int rIdx = (elements.length - 1) - head; // 'real' index at end of array
+        if (index <= rIdx) return elements[index + head]; // it's on the 'right' side of array
         return elements[index - (rIdx + 1)];// index is wrapped
     }
 
