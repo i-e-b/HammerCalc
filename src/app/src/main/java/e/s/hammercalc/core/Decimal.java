@@ -261,7 +261,7 @@ public class Decimal {
     /**
      * String pulled apart to use for parsing
      */
-    public class NumericString {
+    public static class NumericString {
         /**
          * position of decimal point, or -1 if none
          */
@@ -333,15 +333,27 @@ public class Decimal {
                         }
                         break;
                     }
+                    case 'p':
+                    case 'P': // exponent marker for all bases
+                    {
+                        if (!inExp) { // only one exponent
+                            sb = sb_exponent; // switch, but don't store the P mark
+                            inExp = true;
+                        } else {
+                            valid = false;
+                            return;
+                        }
+                        break;
+                    }
                     case 'e':
                     case 'E': // exponent marker OR 14 in hex
                     {
                         if (baseSize == 16) { // hex
                             sb.append('E'); // normal character
-                        } else if (baseSize == 10) {
+                        } else if (!inExp) { // only one exponent
                             sb = sb_exponent; // switch, but don't store the E mark
                             inExp = true;
-                        } else { // not valid
+                        } else {
                             valid = false;
                             return;
                         }
@@ -355,9 +367,9 @@ public class Decimal {
                     case 'o':
                     case 'O': // OCT base marker
                     {
-                        if (sb.length() == 1) {
+                        if (!inExp && sb.length() == 1) {
                             // must be at start of mantissa, and be '0x...', '0b...', '0o...', or uppercase version
-                            if (inExp || sb.charAt(0) != '0') {
+                            if (sb.charAt(0) != '0') {
                                 valid = false;
                                 return;
                             }
@@ -382,53 +394,55 @@ public class Decimal {
                         // in C#, this would be `goto default;`
                     }
                     default: { // regular characters
-                        switch (baseSize) {
-                            case 16: { // integer only, 0..F
-                                if (c >= '0' && c <= '9') sb.append(c);
-                                else if (c >= 'a' && c <= 'f') sb.append(Character.toUpperCase(c));
-                                else if (c >= 'A' && c <= 'F') sb.append(c);
-                                else if (! isSeparator(c)){
-                                    valid = false;
-                                    return;
-                                }
-                                break;
-                            }
-                            case 10: { // integer or fractional, 0..9
-                                if (c == Config.decimalPlaceChar) {
-                                    if (inExp) {
+                        if (c == Config.decimalPlaceChar) {
+                            if (inExp) {
+                                valid = false;
+                                return;
+                            } // no fractional 'E' form (these are not real exponents)
+                            decimalPosition = sb.length();
+                        } else {
+                            switch (baseSize) {
+                                case 16: { // integer only, 0..F
+                                    if (c >= '0' && c <= '9') sb.append(c);
+                                    else if (c >= 'a' && c <= 'f') sb.append(Character.toUpperCase(c));
+                                    else if (c >= 'A' && c <= 'F') sb.append(c);
+                                    else if (notSeparator(c)) {
                                         valid = false;
                                         return;
-                                    } // no fractional 'E' form (these are not real exponents)
-                                    decimalPosition = sb.length();
-                                } else if (c >= '0' && c <= '9') sb.append(c);
-                                else if (! isSeparator(c)){
-                                    valid = false;
-                                    return;
+                                    }
+                                    break;
                                 }
-                                break;
+                                case 10: { // integer or fractional, 0..9
+                                    if (c >= '0' && c <= '9') sb.append(c);
+                                    else if (notSeparator(c)) {
+                                        valid = false;
+                                        return;
+                                    }
+                                    break;
+                                }
+                                case 8: { // integer only, 0..7
+                                    if (c >= '0' && c <= '7') sb.append(c);
+                                    else if (notSeparator(c)) {
+                                        valid = false;
+                                        return;
+                                    }
+                                    break;
+                                }
+                                case 2: { // integer only, 0..1
+                                    if (c == '0' || c == '1') sb.append(c);
+                                    else if (notSeparator(c)) {
+                                        valid = false;
+                                        return;
+                                    }
+                                    break;
+                                }
+                                default:
+                                    if (notSeparator(c)) {
+                                        valid = false;
+                                        return;
+                                    }
+                                    break;
                             }
-                            case 8: { // integer only, 0..7
-                                if (c >= '0' && c <= '7') sb.append(c);
-                                else if (! isSeparator(c)){
-                                    valid = false;
-                                    return;
-                                }
-                                break;
-                            }
-                            case 2: { // integer only, 0..1
-                                if (c == '0' || c == '1') sb.append(c);
-                                else if (! isSeparator(c)){
-                                    valid = false;
-                                    return;
-                                }
-                                break;
-                            }
-                            default:
-                                if (! isSeparator(c)){
-                                    valid = false;
-                                    return;
-                                }
-                                break;
                         }
                     }
                 }
@@ -438,18 +452,21 @@ public class Decimal {
             exponent = sb_exponent.toString();
         }
 
-        /** characters that can be used to break up numbers, and will be ignored */
-        private boolean isSeparator(char c) {
-            switch (c){
+        /**
+         * characters that can be used to break up numbers, and will be ignored
+         */
+        private boolean notSeparator(char c) {
+            switch (c) {
                 case ' ':
                 case '_':
                 case '\'':
                 case '`':
                 case '.':
                 case ',':
-                    return Config.decimalPlaceChar != c; // only ignore it if it's not the decimal position character.
+                    return Config.decimalPlaceChar == c; // only ignore it if it's not the decimal position character.
 
-                default: return false;
+                default:
+                    return true;
             }
         }
     }
@@ -539,12 +556,16 @@ public class Decimal {
      * Parse the input string as an unsigned decimal string.
      * Input string should have been through the filter process before calling
      */
-    private static void parseDecimal(Decimal x, NumericString num) { // L3513
+    private static void parseDecimal(Decimal x, NumericString num) {
+        // L3513
         // try to find decimal place
         int e = num.decimalPosition;
 
+        // TODO: update NumericString to simplify this
+        // TODO: do our own parsing so we can remove substring and string concatenation
+
         // Exponent form?
-        if (num.exponent.length() > 0){
+        if (num.exponent.length() > 0) {
             e += parseDoubleOrNaN(num.exponent);
         } else if (e < 0) {
             e = num.mantissa.length(); // integer
@@ -552,17 +573,18 @@ public class Decimal {
 
         // Determine leading zeros
         int i;
-        for (i = 0; num.mantissa.charAt(i) == '0'; i++);
+        for (i = 0; num.mantissa.charAt(i) == '0'; i++) ;
 
         // Determine trailing zeros
         int len;
-        for (len = num.mantissa.length(); num.mantissa.charAt(len-1) == '0'; --len);
+        for (len = num.mantissa.length(); num.mantissa.charAt(len - 1) == '0'; --len) ;
 
         String str = num.mantissa.substring(i, len);
-        if (str.isEmpty()){ // all zeros
+        if (str.isEmpty()) { // all zeros
             x.e = 0;
             x.d = DdVec.FromDouble(0);
         } else { // L3540
+            x.d = new DdVec();
             len -= i;
             e = e - i - 1;
             x.e = e;
@@ -571,25 +593,25 @@ public class Decimal {
 
             // e is the base10 exponent
             // i is where to slice str to get the first word of the digits array
-            i = (e + 1) % (int)Const.LOG_BASE;
+            i = (e + 1) % (int) Const.LOG_BASE;
             if (e < 0) i += Const.LOG_BASE;
 
-            if (i < len){
+            if (i < len) {
                 if (i != 0) x.d.addLast(parseDoubleOrNaN(str, 0, i));
-                for (len -= Const.LOG_BASE; i < len;){
+                for (len -= Const.LOG_BASE; i < len; ) {
                     x.d.addLast(parseDoubleOrNaN(str, i, i += Const.LOG_BASE));
                 }
                 str = str.substring(i);
-                i = (int)Const.LOG_BASE - str.length();
+                i = (int) Const.LOG_BASE - str.length();
             } else {
                 i -= len;
             }
 
-            for (; i-- > 0 ;) str = str + "0";
+            for (; i-- > 0; ) str = str + "0";
             x.d.addLast(parseDoubleOrNaN(str));
 
             if (x.external) {
-                if (x.e > Config.maxE){ // Overflow to infinity
+                if (x.e > Config.maxE) { // Overflow to infinity
                     x.d = null;
                     x.e = NaN;
                 } else if (x.e < Config.minE) { // underflow to zero
@@ -598,24 +620,26 @@ public class Decimal {
                 }
             }
         }
-
-        //return x;
     }
 
-    /** Parse a string to a double value. If parsing fails, return NaN. */
+    /**
+     * Parse a string to a double value. If parsing fails, return NaN.
+     */
     private static double parseDoubleOrNaN(String str) {
         try {
             return Double.parseDouble(str);
-        } catch (Exception ex){
+        } catch (Exception ex) {
             return NaN;
         }
     }
 
-    /** Parse a range inside a string to a double value. If parsing fails, return NaN. */
+    /**
+     * Parse a range inside a string to a double value. If parsing fails, return NaN.
+     */
     private static double parseDoubleOrNaN(String str, int start, int end) {
         try {
             return Double.parseDouble(str.substring(start, end));
-        } catch (Exception ex){
+        } catch (Exception ex) {
             return NaN;
         }
     }
@@ -630,31 +654,69 @@ public class Decimal {
     }
 
     /**
+     * Return a new decimal with a not-a-number value
+     */
+    public static Decimal decimalNaN() {
+        Decimal d = new Decimal();
+        d.s = NaN;
+        d.e = NaN;
+        d.d = null;
+        return d;
+    }
+
+    /**
+     * Set this decimal instance to a not-a-number value
+     */
+    private void makeNaN() {
+        s = NaN;
+        e = NaN;
+        d = null;
+    }
+
+    /**
+     * Set this decimal instance to an infinite value, keeping existing sign
+     */
+    private void makeInfinite() {
+        e = NaN;
+        d = null;
+    }
+
+    /**
      * Create a new decimal by parsing a string value
      */
     public Decimal(String str) {
         if (str == null || str.equals("")) { // null or empty strings result in NaN
-            s = NaN;
-            e = NaN;
-            d = null;
+            makeNaN();
+            return;
+        }
+        if (str.equals("NaN")) {
+            makeNaN();
+            return;
+        }
+        if (str.equals("Infinity") || str.equals("+Infinity")) {
+            s = 1;
+            makeInfinite();
+            return;
+        }
+        if (str.equals("-Infinity")) {
+            s = -1;
+            makeInfinite();
             return;
         }
 
         NumericString nstr = new NumericString(str);
 
         if (!nstr.valid) { // badly formed strings result in NaN
-            s = NaN;
-            e = NaN;
-            d = null;
+            makeNaN();
             return;
         }
 
         s = nstr.sign;
 
         if (nstr.baseSize == 10) {
-            parseDecimal(this, nstr);
+            parseDecimal(this, nstr); // base10 that might be fractional, and might have an exponent
         } else {
-            parseOther(this, nstr);
+            parseOther(this, nstr); // other base, that will be integer without exponent
         }
     }
 

@@ -100,11 +100,10 @@ public class DdVec {
     }
 
     /**
-     * Constructs an empty array deque with an initial capacity
-     * sufficient to hold 16 elements.
+     * Constructs an empty array deque
      */
     public DdVec() {
-        elements = new Double[16];
+        elements = new Double[8];
     }
 
     /**

@@ -24,4 +24,19 @@ public class DecimalUnitTest {
         assertEquals("upper bound", 1, d.cmp(h));
         assertEquals("equality", 0, d.cmp(eq));
     }
+
+    @Test
+    public void can_create_decimal_from_a_string(){
+        Decimal zero = new Decimal("0.0");
+
+        Decimal decimalBelow = new Decimal("543209.99");
+        Decimal integral = new Decimal("543210");
+        Decimal decimalAbove = new Decimal("543210.99");
+
+        Decimal otherZero = new Decimal();
+
+        assertEquals("zeros are equal", 0, zero.cmp(otherZero));
+        assertEquals("lower", -1, integral.cmp(decimalAbove));
+        assertEquals("higher", 1, integral.cmp(decimalBelow));
+    }
 }
