@@ -6,11 +6,12 @@ import java.util.regex.Pattern;
 
 /**
  * Decimal mathematics class.
- * Ported from https://github.com/MikeMcl/decimal.js/
- * Licenced at https://github.com/MikeMcl/decimal.js/blob/master/LICENCE.md
  * <p>
  * Each decimal instance is immutable, and operations
  * return a new instance with the result values.
+ * <ul><li>Ported from <a href="https://github.com/MikeMcl/decimal.js/">decimal.js</a></li>
+ * <li><a href="https://github.com/MikeMcl/decimal.js/blob/master/LICENCE.md">Licenced under MIT</a></li>
+ * <li><a href="https://mikemcl.github.io/decimal.js/">Original documentation</a></li></ul>
  */
 public class Decimal {
     /**
@@ -538,12 +539,85 @@ public class Decimal {
      * Parse the input string as an unsigned decimal string.
      * Input string should have been through the filter process before calling
      */
-    private static void parseDecimal(Decimal x, NumericString str) { // L3513
+    private static void parseDecimal(Decimal x, NumericString num) { // L3513
         // try to find decimal place
-        int e = str.decimalPosition;
+        int e = num.decimalPosition;
 
         // Exponent form?
-        // IEB: Continue here
+        if (num.exponent.length() > 0){
+            e += parseDoubleOrNaN(num.exponent);
+        } else if (e < 0) {
+            e = num.mantissa.length(); // integer
+        }
+
+        // Determine leading zeros
+        int i;
+        for (i = 0; num.mantissa.charAt(i) == '0'; i++);
+
+        // Determine trailing zeros
+        int len;
+        for (len = num.mantissa.length(); num.mantissa.charAt(len-1) == '0'; --len);
+
+        String str = num.mantissa.substring(i, len);
+        if (str.isEmpty()){ // all zeros
+            x.e = 0;
+            x.d = DdVec.FromDouble(0);
+        } else { // L3540
+            len -= i;
+            e = e - i - 1;
+            x.e = e;
+
+            // Transform base
+
+            // e is the base10 exponent
+            // i is where to slice str to get the first word of the digits array
+            i = (e + 1) % (int)Const.LOG_BASE;
+            if (e < 0) i += Const.LOG_BASE;
+
+            if (i < len){
+                if (i != 0) x.d.addLast(parseDoubleOrNaN(str, 0, i));
+                for (len -= Const.LOG_BASE; i < len;){
+                    x.d.addLast(parseDoubleOrNaN(str, i, i += Const.LOG_BASE));
+                }
+                str = str.substring(i);
+                i = (int)Const.LOG_BASE - str.length();
+            } else {
+                i -= len;
+            }
+
+            for (; i-- > 0 ;) str = str + "0";
+            x.d.addLast(parseDoubleOrNaN(str));
+
+            if (x.external) {
+                if (x.e > Config.maxE){ // Overflow to infinity
+                    x.d = null;
+                    x.e = NaN;
+                } else if (x.e < Config.minE) { // underflow to zero
+                    x.e = 0;
+                    x.d = DdVec.FromDouble(0);
+                }
+            }
+        }
+
+        //return x;
+    }
+
+    /** Parse a string to a double value. If parsing fails, return NaN. */
+    private static double parseDoubleOrNaN(String str) {
+        try {
+            return Double.parseDouble(str);
+        } catch (Exception ex){
+            return NaN;
+        }
+    }
+
+    /** Parse a range inside a string to a double value. If parsing fails, return NaN. */
+    private static double parseDoubleOrNaN(String str, int start, int end) {
+        try {
+            return Double.parseDouble(str.substring(start, end));
+        } catch (Exception ex){
+            return NaN;
+        }
     }
 
     /**
