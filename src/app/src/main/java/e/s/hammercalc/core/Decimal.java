@@ -14,6 +14,7 @@ import java.util.regex.Pattern;
  * <li><a href="https://mikemcl.github.io/decimal.js/">Original documentation</a></li></ul>
  */
 public class Decimal {
+
     /**
      * Configuration for numbers and operations
      * Most of these values can be changed at run-time using `Decimal.Config`.
@@ -203,6 +204,14 @@ public class Decimal {
          * Base conversion alphabet
          */
         public static final char[] NUMERALS = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
+        /** convert a character to it's positional value. Undefined for invalid input */
+        public static int NUMERALS(char c) {
+            int i = c - '0';
+            if (i < 10) return i;
+            i = (c - 'A')+10;
+            if (i < 16) return i;
+            return (c - 'a')+10;
+        }
 
         /**
          * The natural logarithm of 10 to 1025 digits
@@ -230,6 +239,7 @@ public class Decimal {
          * Maximum value of a double before epsilon exceeds 1.0
          */
         public static final double MAX_SAFE_INTEGER = 9007199254740991d;
+
     }
 
     /**
@@ -489,7 +499,7 @@ public class Decimal {
     /**
      * True if value might need normalising
      */
-    private boolean external = true;
+    private static boolean external = true;
 
     /**
      * Create a new decimal with zero value
@@ -573,17 +583,17 @@ public class Decimal {
 
         // Determine leading zeros
         int i;
-        for (i = 0; num.mantissa.charAt(i) == '0'; i++) ;
+        for (i = 0; i < num.mantissa.length() && num.mantissa.charAt(i) == '0'; i++) ;
 
         // Determine trailing zeros
         int len;
-        for (len = num.mantissa.length(); num.mantissa.charAt(len - 1) == '0'; --len) ;
+        for (len = num.mantissa.length(); len > 0 && num.mantissa.charAt(len - 1) == '0'; --len) ;
 
-        String str = num.mantissa.substring(i, len);
-        if (str.isEmpty()) { // all zeros
+        if (len <= i) { // all zeros
             x.e = 0;
             x.d = DdVec.FromDouble(0);
         } else { // L3540
+            String str = num.mantissa.substring(i, len);
             x.d = new DdVec();
             len -= i;
             e = e - i - 1;
@@ -610,7 +620,7 @@ public class Decimal {
             for (; i-- > 0; ) str = str + "0";
             x.d.addLast(parseDoubleOrNaN(str));
 
-            if (x.external) {
+            if (external) {
                 if (x.e > Config.maxE) { // Overflow to infinity
                     x.d = null;
                     x.e = NaN;
@@ -622,35 +632,43 @@ public class Decimal {
         }
     }
 
-    /**
-     * Parse a string to a double value. If parsing fails, return NaN.
-     */
-    private static double parseDoubleOrNaN(String str) {
-        try {
-            return Double.parseDouble(str);
-        } catch (Exception ex) {
-            return NaN;
-        }
-    }
-
-    /**
-     * Parse a range inside a string to a double value. If parsing fails, return NaN.
-     */
-    private static double parseDoubleOrNaN(String str, int start, int end) {
-        try {
-            return Double.parseDouble(str.substring(start, end));
-        } catch (Exception ex) {
-            return NaN;
-        }
-    }
 
     /**
      * Modify this Decimal in place -- for use in constructors only.
      * Parse the input string as an unsigned unknown number
      * Input string should have been through the filter process before calling
      */
-    private static void parseOther(Decimal x, NumericString str) {
-        // IEB: TODO!
+    private static void parseOther(Decimal x, NumericString num) {
+        // L3620 (lines before this are in NumericString
+
+        long p = 0;
+        if (num.exponent.length() > 0) {
+            double px = parseDoubleOrNaN(num.exponent);
+            if (Double.isNaN(px)){
+                x.makeNaN();
+                return;
+            }
+            p = (long)px;
+        }
+        String str = num.mantissa;
+
+
+        // Convert `str` as an integer then divide the result by `base` raised to a power such that the
+        // fraction part will be restored.
+        int i = num.mantissa.length();
+        Decimal divisor = new Decimal(1);
+        Decimal dbase = new Decimal(num.baseSize);
+        if (num.decimalPosition >= 0){ // L3635
+            // log[10](16) = 1.2041... , log[10](88) = 1.9444....
+            divisor = intPow(dbase, i, i*i);
+        }
+
+
+        DdVec xd = convertBase(str, num.baseSize, Const.BASE);
+        int xe = xd.length() - 1;
+
+        // Remove trailing zeros. // L3647
+        // IEB: Do bits in DdVec, then continue here
     }
 
     /**
@@ -662,23 +680,6 @@ public class Decimal {
         d.e = NaN;
         d.d = null;
         return d;
-    }
-
-    /**
-     * Set this decimal instance to a not-a-number value
-     */
-    private void makeNaN() {
-        s = NaN;
-        e = NaN;
-        d = null;
-    }
-
-    /**
-     * Set this decimal instance to an infinite value, keeping existing sign
-     */
-    private void makeInfinite() {
-        e = NaN;
-        d = null;
     }
 
     /**
@@ -721,56 +722,11 @@ public class Decimal {
     }
 
     /**
-     * Remove spaces and underscores from a string.
-     * We are very aggressive in removing what we don't accept, so string input can be quite lax
-     */
-    private String filterNumberString(String str) {
-        if (str == null) return "";
-        StringBuilder sb = new StringBuilder();
-
-        for (char c : str.toCharArray()) {
-            if (c >= '0' && c <= '9') { // decimal characters
-                sb.append(c);
-            } else {
-                switch (c) { // signs and markers
-                    case '-':
-                    case '−':
-                    case '˗':
-                    case '－': // negatives
-                        sb.append('-');
-                        continue;
-                    case '+':
-                    case '˖':
-                    case '＋': // positives
-                        sb.append('+');
-                        continue;
-                    case 'x':
-                    case 'X': // base marker
-                        sb.append('x');
-                        continue;
-                    case 'e':
-                    case 'E': // exponent marker OR 14 in hex
-                        sb.append('E');
-                        continue;
-                }
-                // Hex characters
-                if (c >= 'a' && c <= 'f') sb.append(Character.toUpperCase(c));
-                if (c >= 'A' && c <= 'F') sb.append(c);
-                // Decimal separator
-                if (c == Config.decimalPlaceChar) sb.append(c);
-            }
-        }
-
-        return sb.toString();
-    }
-
-    /**
      * Create a decimal value as a copy of another
      */
     public Decimal(Decimal v) { // L4293
         s = v.s;
-        external = true;
-        if (v.external) { // if either should be normalised
+        if (external) { // if either should be normalised
             if (v.d == null || v.e > Config.maxE) {
                 // Infinity
                 e = NaN;
@@ -860,7 +816,105 @@ public class Decimal {
      * Return true if decimal is invalid, false otherwise
      */
     public boolean isNaN() {
-        return d == null || d.size() < 1 || Double.isNaN(s);
+        return (d == null || d.size() < 1) && Double.isNaN(s);
+    }
+
+    /** Display the internal state of this Decimal */
+    public String toRawString() {
+        StringBuilder sb = new StringBuilder();
+
+        sb.append("Sign=");
+        sb.append((int)s);
+
+        sb.append("; Exponent=");
+        if (Double.isFinite(e)) sb.append((long)e);
+        else sb.append(e);
+
+        if (d == null){
+            sb.append("; Digits=<null>;");
+        } else if (d.isEmpty()) {
+            sb.append("; Digits=<empty>;");
+        } else {
+            sb.append("; Digits=");
+            boolean s = false;
+            double[] digits = d.toArray();
+            for (double v : digits) {
+                if (s) sb.append(',');
+                else s = true;
+
+                sb.append('[');
+                sb.append((long)v);
+                sb.append(']');
+            }
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * Return a new Decimal whose value is the value of Decimal `x` to the power `n`, where `n` is an
+     * integer of type number.
+     *
+     * Implements 'exponentiation by squaring'. Called by `pow` and `parseOther`.
+     *
+     * @param x number to be raised
+     * @param n integer exponent
+     * @param pr precision for result (in significant figures)
+     */
+    private static Decimal intPow(Decimal x, long n, int pr) {
+        boolean isTruncated = false;
+        Decimal r = new Decimal(1.0);
+
+        // Max n of 9007199254740991 takes 53 loop iterations.
+        // Maximum digits array length; leaves [28, 34] guard digits.
+        int k = (int)Math.ceil(pr / Const.LOG_BASE + 4);
+
+        external = false; // turn off normalisation
+
+        for (;;) {
+            if ((n % 2) != 0) {
+                r = r.times(x);
+                if (truncate(r.d, k)) isTruncated = true;
+            }
+
+            n = (int)Math.floor(n / 2.0);
+            if (n == 0) {
+
+                // To ensure correct rounding when r.d is truncated, increment the last word if it is zero.
+                n = r.d.length() - 1;
+                if (isTruncated && r.d.get((int)n) == 0) r.d.increment((int)n, 1.0);
+                break;
+            }
+
+            x = x.times(x);
+            truncate(x.d, k);
+        }
+
+        external = true;
+
+        return r;
+    }
+
+    public Decimal times(Decimal x) { // L1869
+        return x; // TODO: implement
+    }
+
+
+    /**
+     * Set this decimal instance to a not-a-number value
+     */
+    private void makeNaN() {
+        s = NaN;
+        e = NaN;
+        d = null;
+    }
+
+    /**
+     * Set this decimal instance to an infinite value, keeping existing sign
+     */
+    private void makeInfinite() {
+        e = NaN;
+        d = null;
     }
 
     /**
@@ -1028,5 +1082,63 @@ public class Decimal {
         }
 
         return x;
+    }
+
+    /** Truncate vector if required. Does not extend length.
+     * Returns true if vector was shortened */
+    private static boolean truncate(DdVec arr, int len) {
+        if (arr.length() > len) {
+            arr.truncateTo(len);
+            return true;
+        }
+        return false;
+    }
+
+    /** Convert string of `baseIn` to an array of numbers of `baseOut`.
+     Eg. convertBase('255', 10, 16) returns [15, 15].
+     Eg. convertBase('ff', 16, 10) returns [2, 5, 5].
+     */
+    private static DdVec convertBase(String str, double baseIn, double baseOut) {
+        int j, i=0;
+        DdVec arr = DdVec.FromDouble(0);
+        int arrL;
+        int strL = str.length();
+
+        for (; i < strL;) {
+            for (arrL = arr.length(); arrL-->0;) arr.multiply(arrL, baseIn);
+            arr.increment(0, Const.NUMERALS(str.charAt(i++)));
+            for (j = 0; j < arr.length(); j++) {
+                if (arr.get(j) > baseOut - 1) {
+                    if (!arr.hasIndex(j + 1)) arr.addLast(0);
+                    arr.increment(j + 1, (long)(arr.get(j) / baseOut));
+                    arr.modulo(j, baseOut);//arr[j] %= baseOut;
+                }
+            }
+        }
+
+        arr.reverse();
+        return arr;
+    }
+
+    /**
+     * Parse a string to a double value. If parsing fails, return NaN.
+     */
+    private static double parseDoubleOrNaN(String str) {
+        try {
+            return Double.parseDouble(str);
+        } catch (Exception ex) {
+            return NaN;
+        }
+    }
+
+    /**
+     * Parse a range inside a string to a double value. If parsing fails, return NaN.
+     */
+    private static double parseDoubleOrNaN(String str, int start, int end) {
+        try {
+            return Double.parseDouble(str.substring(start, end));
+        } catch (Exception ex) {
+            return NaN;
+        }
     }
 }

@@ -412,4 +412,20 @@ public class DdVec {
             this.pollLast();
         }
     }
+
+    /** reverse the order of items in this vector, without moving head or tail pointers */
+    public int reverse() {
+        // IEB: Continue here
+        return 0;
+    }
+
+    /** update value at index to equal (value * mod) */
+    public void multiply(int index, double v) {
+        // IEB: Continue here
+    }
+
+    /** update value at index to equal (value % mod) */
+    public void modulo(int index, double mod) {
+        // IEB: Continue here
+    }
 }
