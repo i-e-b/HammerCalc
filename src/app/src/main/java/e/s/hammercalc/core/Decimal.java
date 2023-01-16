@@ -638,8 +638,9 @@ public class Decimal {
      * Parse the input string as an unsigned unknown number
      * Input string should have been through the filter process before calling
      */
-    private static void parseOther(Decimal x, NumericString num) {
+    private static void parseOther(Decimal target, NumericString num) {
         // L3620 (lines before this are in NumericString
+        Decimal x = target;
 
         long p = 0;
         if (num.exponent.length() > 0) {
@@ -660,6 +661,7 @@ public class Decimal {
         Decimal dbase = new Decimal(num.baseSize);
         if (num.decimalPosition >= 0){ // L3635
             // log[10](16) = 1.2041... , log[10](88) = 1.9444....
+            i = num.mantissa.length() - num.decimalPosition; // ??? L3638
             divisor = intPow(dbase, i, i*i);
         }
 
@@ -668,7 +670,44 @@ public class Decimal {
         int xe = xd.length() - 1;
 
         // Remove trailing zeros. // L3647
-        // IEB: Do bits in DdVec, then continue here
+        for (i = xe; xd.get(i) == 0; --i) xd.removeLast();
+        if (i < 0) { // I think the original code is doing a signed zero here: `return new Ctor(x.s * 0);`
+            x.makeZero();
+            return;
+        }
+        x.e = getBase10Exponent(xd, xe);
+        x.d = xd;
+        external = false;
+
+        // At what precision to perform the division to ensure exact conversion?
+        // maxDecimalIntegerPartDigitCount = ceil(log[10](b) * otherBaseIntegerPartDigitCount)
+        // log[10](2) = 0.30103, log[10](8) = 0.90309, log[10](16) = 1.20412
+        // E.g. ceil(1.2 * 3) = 4, so up to 4 decimal digits are needed to represent 3 hex int digits.
+        // maxDecimalFractionPartDigitCount = {Hex:4|Oct:3|Bin:1} * otherBaseFractionPartDigitCount
+        // Therefore using 4 * the number of digits of str will always be enough.
+        if (num.decimalPosition >= 0) x = divide(x, divisor, num.mantissa.length() * 4); // L3660
+
+        // Multiply by the binary exponent part if present.
+        if (p != 0) {
+            if (Math.abs(p) < 54) x = x.times(Math.pow(2, p));
+            else x = x.times(Decimal.pow(2, p));
+        }
+        external = true;
+        target.setTo(x);
+    }
+
+    private static Decimal divide(Decimal x, Decimal divisor, int i) {
+        return null;
+    }
+
+    private static Decimal pow(int i, long p) {
+        // IEB: TODO
+        return null;
+    }
+
+    private static double getBase10Exponent(DdVec xd, int xe) {
+        // IEB: TODO
+        return 0;
     }
 
     /**
@@ -898,6 +937,9 @@ public class Decimal {
     public Decimal times(Decimal x) { // L1869
         return x; // TODO: implement
     }
+    public Decimal times(double x) { // L1869
+        return null; // TODO: implement
+    }
 
 
     /**
@@ -915,6 +957,21 @@ public class Decimal {
     private void makeInfinite() {
         e = NaN;
         d = null;
+    }
+
+    /**
+     * Set this decimal instance to a zero value, keeping existing sign
+     */
+    private void makeZero() {
+        e = 0;
+        d = DdVec.FromDouble(0);
+    }
+
+    /** Mutate this decimal to use same values as another (INTERNAL USE ONLY) */
+    private void setTo(Decimal x) {
+        d = x.d; // ref, not copy
+        e = x.e;
+        s = x.s;
     }
 
     /**

@@ -4,6 +4,8 @@ import org.junit.Test;
 
 import static org.junit.Assert.*;
 
+import java.util.Arrays;
+
 import e.s.hammercalc.core.DdVec;
 
 public class DdVecTest {
@@ -223,13 +225,15 @@ public class DdVecTest {
 
     @Test
     public void can_modify_items_in_vec_in_place_by_index() {
-        double[] src = {0.1, 1.2, 2.3, 3.4, 4.5, 5.6};
+        double[] src = {0.1, 1.2, 2.3, 3.4, 4.5, 123};
         DdVec v = new DdVec(src);
 
         v.increment(1, 10.0);
+        v.multiply(2, 10.0);
         v.set(4, -4.4);
+        v.modulo(5, 10);
 
-        double[] expected = {0.1, 11.2, 2.3, 3.4, -4.4, 5.6};
+        double[] expected = {0.1, 11.2, 23.0, 3.4, -4.4, 3};
         double[] result = v.toArray();
 
         assertEquals("vector length", 6, v.length());
@@ -281,5 +285,65 @@ public class DdVecTest {
         for (int i = 0; i < expected.length; i++) {
             assertEquals("index "+i, expected[i], result[i], epsilon);
         }
+    }
+
+    @Test
+    public void can_reverse_vector_in_place_after_various_operations_1(){
+        DdVec v = new DdVec();
+
+        v.reverse(); // should be a no-op, cause no errors
+        assertEquals("vector length", 0, v.length());
+
+        v.addLast(5);  // 5
+        v.addFirst(4); // 4 5
+
+        System.out.println(Arrays.toString(v.toArray()));
+        assertArrayEquals("a", new double[]{4,5}, v.toArray(), epsilon);
+        v.reverse();
+        assertArrayEquals("b", new double[]{5,4}, v.toArray(), epsilon);
+        v.reverse();
+        assertArrayEquals("c", new double[]{4,5}, v.toArray(), epsilon);
+
+        v.addLast(6);  // 4 5 6
+        v.addFirst(3); // 3 4 5 6
+        v.addLast(7);  // 3 4 5 6 7
+        v.addFirst(2); // 2 3 4 5 6 7
+
+        assertArrayEquals("d", new double[]{2,3,4,5,6,7}, v.toArray(), epsilon);
+        v.reverse();
+        assertArrayEquals("e", new double[]{7,6,5,4,3,2}, v.toArray(), epsilon);
+        v.reverse();
+        assertArrayEquals("f", new double[]{2,3,4,5,6,7}, v.toArray(), epsilon);
+
+        v.addLast(8);  // 2 3 4 5 6 7 8
+        v.addFirst(1); // 1 2 3 4 5 6 7 8
+        v.addLast(9);  // 1 2 3 4 5 6 7 8 9
+        v.addFirst(0); // 0 1 2 3 4 5 6 7 8 9
+
+        assertArrayEquals("g", new double[]{0,1,2,3,4,5,6,7,8,9}, v.toArray(), epsilon);
+        v.reverse();
+        assertArrayEquals("h", new double[]{9,8,7,6,5,4,3,2,1,0}, v.toArray(), epsilon);
+        v.reverse();
+        assertArrayEquals("i", new double[]{0,1,2,3,4,5,6,7,8,9}, v.toArray(), epsilon);
+    }
+
+    @Test
+    public void can_reverse_vector_in_place_after_various_operations_2(){
+        DdVec v = new DdVec();
+
+        v.addLast(-1);
+        v.addLast(-1);
+        v.addLast(0);
+        v.addLast(1);
+        v.addLast(2);
+        v.addLast(3);
+        v.removeFirst();
+        v.removeFirst();
+
+        assertArrayEquals("a", new double[]{0,1,2,3}, v.toArray(), epsilon);
+        v.reverse();
+        assertArrayEquals("b", new double[]{3,2,1,0}, v.toArray(), epsilon);
+        v.reverse();
+        assertArrayEquals("c", new double[]{0,1,2,3}, v.toArray(), epsilon);
     }
 }

@@ -356,7 +356,7 @@ public class DdVec {
         else elements[index - (rIdx + 1)] = value;// index is wrapped
     }
 
-    /** Add v to the value at given index */
+    /** update value at index to equal (value + v) */
     public void increment(int index, double v) {
         if (index >= length()) return;
         if (index < 0) return;
@@ -372,6 +372,42 @@ public class DdVec {
         int rIdx = (elements.length - 1) - head; // 'real' index at end of array
         if (index <= rIdx) elements[index + head] += v; // it's on the 'right' side of array
         else elements[index - (rIdx + 1)] += v;// index is wrapped
+    }
+
+    /** update value at index to equal (value * v) */
+    public void multiply(int index, double v) {
+        if (index >= length()) return;
+        if (index < 0) return;
+
+        final int head = this.head;
+        final int tail = this.tail;
+
+        if (head < tail) {
+            elements[index + head] *= v;
+            return;
+        }
+
+        int rIdx = (elements.length - 1) - head; // 'real' index at end of array
+        if (index <= rIdx) elements[index + head] *= v; // it's on the 'right' side of array
+        else elements[index - (rIdx + 1)] *= v;// index is wrapped
+    }
+
+    /** update value at index to equal (value % mod) */
+    public void modulo(int index, double mod) {
+        if (index >= length()) return;
+        if (index < 0) return;
+
+        final int head = this.head;
+        final int tail = this.tail;
+
+        if (head < tail) {
+            elements[index + head] = elements[index + head] % mod;
+            return;
+        }
+
+        int rIdx = (elements.length - 1) - head; // 'real' index at end of array
+        if (index <= rIdx) elements[index + head] = elements[index + head] % mod; // it's on the 'right' side of array
+        else elements[index - (rIdx + 1)] = elements[index - (rIdx + 1)] % mod;// index is wrapped
     }
 
     /** return the value at the given index. Returns NaN if out of range */
@@ -414,18 +450,22 @@ public class DdVec {
     }
 
     /** reverse the order of items in this vector, without moving head or tail pointers */
-    public int reverse() {
-        // IEB: Continue here
-        return 0;
-    }
+    public void reverse() {
+        if (length() < 2) return;
 
-    /** update value at index to equal (value * mod) */
-    public void multiply(int index, double v) {
-        // IEB: Continue here
-    }
+        int h = head;
+        int t = tail;
+        int m = elements.length - 1;
+        int c = length() / 2;
 
-    /** update value at index to equal (value % mod) */
-    public void modulo(int index, double mod) {
-        // IEB: Continue here
+        t = (t - 1) & m;
+        for (int i = 0; i < c; i++) {
+            Double tmp = elements[h];
+            elements[h] = elements[t];
+            elements[t] = tmp;
+            h = (h + 1) & m;
+            t = (t - 1) & m;
+        }
+
     }
 }
