@@ -131,6 +131,16 @@ public class DdVec {
         for (double d : c) addLast(d);
     }
 
+    /**
+     * Create a copy of 'other'. No data is shared.
+     */
+    public DdVec(DdVec other){
+        elements = new Double[other.elements.length];
+        this.head = other.head;
+        this.tail = other.tail;
+        System.arraycopy(other.elements, 0, this.elements, 0, elements.length);
+    }
+
     // The main insertion and extraction methods are addFirst,
     // addLast, pollFirst, pollLast. The other methods are defined in
     // terms of these.
@@ -433,6 +443,22 @@ public class DdVec {
         return elements[index - (rIdx + 1)];// index is wrapped
     }
 
+    /** return the value at the given index. Returns defaultValue if out of range */
+    public double get(int index, double defaultValue) {
+        if (index >= length()) return defaultValue;
+        if (index < 0) return defaultValue;
+
+        final int head = this.head;
+        final int tail = this.tail;
+
+        if (head < tail) return elements[index + head];
+
+        int rIdx = (elements.length - 1) - head; // 'real' index at end of array
+        if (index <= rIdx) return elements[index + head]; // it's on the 'right' side of array
+        return elements[index - (rIdx + 1)];// index is wrapped
+    }
+
+
     /** returns true if the index is valid in the vector */
     public boolean hasIndex(int idx) {
         return idx >= 0 && idx < length();
@@ -446,6 +472,14 @@ public class DdVec {
         }
         while (length() > newLength){
             this.pollLast();
+        }
+    }
+
+    /** remove zero-valued items from start */
+    public void trimLeadingZero(){
+        while (length() > 0){
+            if (this.getFirst() != 0.0) return;
+            this.removeFirst();
         }
     }
 
@@ -467,5 +501,22 @@ public class DdVec {
             t = (t - 1) & m;
         }
 
+    }
+
+    /**
+     * Create a copy from [start..end)
+     * @param start inclusive start index
+     * @param end exclusive end index
+     */
+    public DdVec slice(int start, int end) {
+        if (start < 0) start += length();
+        if (end < 0) end += length();
+        if (start < 0 || start >= end) return new DdVec();
+
+        DdVec result = new DdVec(end - start);
+        for (int i = start; i < end; i++){
+            result.addLast(get(i));
+        }
+        return result;
     }
 }

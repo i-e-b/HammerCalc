@@ -288,6 +288,54 @@ public class DdVecTest {
     }
 
     @Test
+    public void vectors_can_have_leading_zeros_truncated(){
+        double[] src = {0.0, 0.0, 0.0000001, 1, 2, 0, 0, 0};
+        DdVec v = new DdVec(src);
+
+        assertEquals("length before", 8, v.length());
+        v.trimLeadingZero();
+        assertEquals("length after", 6, v.length());
+        v.trimLeadingZero(); // no-op if no leading zeros
+        assertEquals("length after", 6, v.length());
+
+        assertArrayEquals("values", new double[]{0.0000001, 1, 2, 0, 0, 0}, v.toArray(), epsilon);
+    }
+
+    @Test
+    public void copied_vectors_do_not_share_data(){
+        double[] src = {0.1, 1.2, 2.3, 3.4, 4.5, 5.6};
+        DdVec a = new DdVec(src);
+        DdVec b = new DdVec(a);
+
+        a.set(1, 1000.2);
+
+        assertEquals("A1", 1000.2, a.get(1), epsilon);
+        assertEquals("B1", 1.2, b.get(1), epsilon);
+
+        b.reverse();
+        assertArrayEquals("A2", new double[]{0.1, 1000.2, 2.3, 3.4, 4.5, 5.6}, a.toArray(), epsilon);
+        assertArrayEquals("B2", new double[]{5.6, 4.5, 3.4, 2.3, 1.2, 0.1}, b.toArray(), epsilon);
+    }
+
+    @Test
+    public void can_create_vec_as_subset_of_another() {
+        double[] src = {0.1, 1.2, 2.3, 3.4, 4.5, 5.6};
+        DdVec a = new DdVec(src);
+        DdVec b = a.slice(1,3);
+
+        assertEquals("a size", 6, a.length());
+        assertEquals("b size", 2, b.length());
+
+        // values not shared
+        a.set(1, 100);
+        a.set(2, 200);
+
+        // Check get by index
+        assertArrayEquals("A", new double[]{0.1, 100, 200, 3.4, 4.5, 5.6}, a.toArray(), epsilon);
+        assertArrayEquals("B", new double[]{1.2, 2.3}, b.toArray(), epsilon);
+    }
+
+    @Test
     public void can_reverse_vector_in_place_after_various_operations_1(){
         DdVec v = new DdVec();
 

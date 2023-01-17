@@ -122,7 +122,10 @@ public class Decimal {
         /**
          * (8) Rounds toward nearest neighbour. If equidistant rounds toward negative infinity
          */
-        ROUND_HALF_FLOOR;
+        ROUND_HALF_FLOOR,
+
+        /** The default value should be used */
+        NOT_SPECIFIED;
 
         // Because Java is crap.
         public static int toInt(Rounding rm) {
@@ -184,7 +187,7 @@ public class Decimal {
     }
 
     /**
-     * Constants and limits on configuration
+     * Constants and limits on configuration. Code makes assumptions based on these. They should generally not be changed.
      */
     public static class Const {
         /**
@@ -497,6 +500,11 @@ public class Decimal {
     private double s;
 
     /**
+     * This flag is set 'true' if an operation loses precision
+     */
+    private boolean inexact = false;
+
+    /**
      * True if value might need normalising
      */
     private static boolean external = true;
@@ -560,6 +568,277 @@ public class Decimal {
         // Slow path for floats
         parseDecimal(this, new NumericString(Double.toString(v)));
     }
+
+    /**
+     * Create a new decimal by parsing a string value
+     */
+    public Decimal(String str) {
+        if (str == null || str.equals("")) { // null or empty strings result in NaN
+            makeNaN();
+            return;
+        }
+        if (str.equals("NaN")) {
+            makeNaN();
+            return;
+        }
+        if (str.equals("Infinity") || str.equals("+Infinity")) {
+            s = 1;
+            makeInfinite();
+            return;
+        }
+        if (str.equals("-Infinity")) {
+            s = -1;
+            makeInfinite();
+            return;
+        }
+
+        NumericString nstr = new NumericString(str);
+
+        if (!nstr.valid) { // badly formed strings result in NaN
+            makeNaN();
+            return;
+        }
+
+        s = nstr.sign;
+
+        if (nstr.baseSize == 10) {
+            parseDecimal(this, nstr); // base10 that might be fractional, and might have an exponent
+        } else {
+            parseOther(this, nstr); // other base, that will be integer without exponent
+        }
+    }
+
+    /**
+     * Create a decimal value as a copy of another
+     */
+    public Decimal(Decimal v) { // L4293
+        s = v.s;
+        inexact = v.inexact;
+        if (external) { // if either should be normalised
+            if (v.d == null || v.e > Config.maxE) {
+                // Infinity
+                e = NaN;
+                d = null;
+            } else if (v.e < Config.minE) {
+                // Underflow to zero
+                e = 0;
+                d = DdVec.FromDouble(0);
+            } else {
+                // in range
+                e = v.e;
+                d = new DdVec(v.d.toArray()); // duplicate
+            }
+        } else {
+            e = v.e;
+            d = new DdVec(v.d.toArray()); // duplicate
+        }
+    }
+
+
+    /**
+     * Return a new decimal with a not-a-number value
+     */
+    public static Decimal decimalNaN() {
+        Decimal d = new Decimal();
+        d.d = null;
+        d.e = NaN;
+        d.s = NaN;
+        return d;
+    }
+
+    /**
+     * Return a new decimal with a signed zero value
+     */
+    public static Decimal signedZero(int sign) {
+        Decimal d = new Decimal();
+        d.d = DdVec.FromDouble(0);
+        d.e = 0;
+        d.s = sign;
+        return d;
+    }
+
+    /**
+     * Return a new decimal with a signed infinite value
+     */
+    public static Decimal signedInfinity(int sign) {
+        Decimal d = new Decimal();
+        d.d = null;
+        d.e = NaN;
+        d.s = sign;
+        return d;
+    }
+
+    /**
+     * Returns false if the value is infinite or NaN
+     */
+    public boolean isFinite() {
+        return d != null && d.size() > 0 && Double.isFinite(e) && Double.isFinite(s);
+    }
+
+    /**
+     * Returns true if the value is +infinity or -infinity.
+     */
+    public boolean isInfinity() {
+        return (d == null || d.length() < 1) && !Double.isNaN(s);
+    }
+
+    /**
+     * Return true if the value is zero, but false for non-zero, infinite, or NaN
+     */
+    public boolean isZero() {
+        return d != null && d.size() == 1 && d.get(0) == 0 && e == 0;
+    }
+
+    /** True if this decimal has been through an inexact function */
+    public boolean precisionLost(){
+        return inexact;
+    }
+
+    /**
+     * Return absolute value
+     */
+    public Decimal abs() {
+        Decimal x = new Decimal(this);
+        if (x.s < 0) x.s = 1;
+        return finalise(x, NaN, Config.rounding, false);
+    }
+
+    /**
+     * Return a new Decimal whose value is the value of this Decimal rounded to a whole number in the direction of positive Infinity.
+     */
+    public Decimal ceil() {
+        return finalise(new Decimal(this), this.e + 1, Rounding.ROUND_CEIL, false);
+    }
+
+    /**
+     * Return a new Decimal whose value is the value of this Decimal clamped to the range min..max
+     */
+    public Decimal clamp(Decimal min, Decimal max) {
+        if (min.isNaN() || max.isNaN()) return Decimal.NaN();
+        if (min.gt(max)) return Decimal.NaN();
+        int k = this.cmp(min);
+        if (k < 0) return min;
+        k = this.cmp(max);
+        if (k > 0) return max;
+        return this;
+    }
+
+    /** Return a new Decimal whose value is this decimal raised to power y, rounded
+     * to `precision` significant digits using rounding mode `rounding`.
+     * <p>
+     * The performance of this method degrades exponentially with increasing digits.
+     * For non-integer exponents in particular, the performance of this method may not be adequate.</p>
+     * <pre>
+     * ECMAScript compliant.
+     *
+     *   pow(x, NaN)                           = NaN
+     *   pow(x, ±0)                            = 1
+
+     *   pow(NaN, non-zero)                    = NaN
+     *   pow(abs(x) > 1, +Infinity)            = +Infinity
+     *   pow(abs(x) > 1, -Infinity)            = +0
+     *   pow(abs(x) == 1, ±Infinity)           = NaN
+     *   pow(abs(x) < 1, +Infinity)            = +0
+     *   pow(abs(x) < 1, -Infinity)            = +Infinity
+     *   pow(+Infinity, y > 0)                 = +Infinity
+     *   pow(+Infinity, y < 0)                 = +0
+     *   pow(-Infinity, odd integer > 0)       = -Infinity
+     *   pow(-Infinity, even integer > 0)      = +Infinity
+     *   pow(-Infinity, odd integer < 0)       = -0
+     *   pow(-Infinity, even integer < 0)      = +0
+     *   pow(+0, y > 0)                        = +0
+     *   pow(+0, y < 0)                        = +Infinity
+     *   pow(-0, odd integer > 0)              = -0
+     *   pow(-0, even integer > 0)             = +0
+     *   pow(-0, odd integer < 0)              = -Infinity
+     *   pow(-0, even integer < 0)             = +Infinity
+     *   pow(finite x < 0, finite non-integer) = NaN
+     *
+     * For non-integer or very large exponents pow(x, y) is calculated using
+     *
+     *   x^y = exp(y*ln(x))
+     *
+     * Assuming the first 15 rounding digits are each equally likely to be any digit 0-9, the
+     * probability of an incorrectly rounded result
+     * P([49]9{14} | [50]0{14}) = 2 * 0.2 * 10^-14 = 4e-15 = 1/2.5e+14
+     * i.e. 1 in 250,000,000,000,000
+     *
+     * If a result is incorrectly rounded the maximum error will be 1 ulp (unit in last place).
+     *</pre>
+     * @param y The power to which to raise this Decimal. */
+    public Decimal pow(Decimal y){// L2264
+        // Precondition checks
+
+        // IEB: Continue here
+        return Decimal.decimalNaN(); // delete later
+    }
+
+    /* IEB:TEMP */
+    public boolean gt(Decimal other) {
+        return false;
+    }
+
+    public int cmp(Decimal other) { // decimal.mjs#L242
+        // IEB: CONTINUE HERE
+        if (!this.isFinite() || !other.isFinite()) {
+            if (this.isNaN() || other.isNaN()) return 0;
+            if (this.s != other.s) return (int) this.s;
+        }
+
+        // IEB: TEMP
+        return 0;
+    }
+
+    /**
+     * Return a new decimal with invalid value
+     */
+    public static Decimal NaN() {
+        return new Decimal(NaN);
+    }
+
+    /**
+     * Return true if decimal is invalid, false otherwise
+     */
+    public boolean isNaN() {
+        return (d == null || d.size() < 1) && Double.isNaN(s);
+    }
+
+    /** Display the internal state of this Decimal */
+    public String toRawString() {
+        StringBuilder sb = new StringBuilder();
+
+        sb.append("Sign=");
+        sb.append((int)s);
+
+        sb.append("; Exponent=");
+        if (Double.isFinite(e)) sb.append((long)e);
+        else sb.append(e);
+
+        if (d == null){
+            sb.append("; Digits=<null>;");
+        } else if (d.isEmpty()) {
+            sb.append("; Digits=<empty>;");
+        } else {
+            sb.append("; Digits=");
+            boolean s = false;
+            double[] digits = d.toArray();
+            for (double v : digits) {
+                if (s) sb.append(',');
+                else s = true;
+
+                sb.append('[');
+                sb.append((long)v);
+                sb.append(']');
+            }
+        }
+
+        return sb.toString();
+    }
+
+    /*-------------------------------------------------------------------------------------------------------------------------*/
+    /*-------------------------------------------------------------------------------------------------------------------------*/
+    /*-------------------------------------------------------------------------------------------------------------------------*/
+
 
     /**
      * Modify this Decimal in place -- for use in constructors only.
@@ -685,7 +964,7 @@ public class Decimal {
         // E.g. ceil(1.2 * 3) = 4, so up to 4 decimal digits are needed to represent 3 hex int digits.
         // maxDecimalFractionPartDigitCount = {Hex:4|Oct:3|Bin:1} * otherBaseFractionPartDigitCount
         // Therefore using 4 * the number of digits of str will always be enough.
-        if (num.decimalPosition >= 0) x = divide(x, divisor, num.mantissa.length() * 4); // L3660
+        if (num.decimalPosition >= 0) x = divide(x, divisor, num.mantissa.length() * 4, Rounding.NOT_SPECIFIED, false, -1); // L3660
 
         // Multiply by the binary exponent part if present.
         if (p != 0) {
@@ -696,198 +975,277 @@ public class Decimal {
         target.setTo(x);
     }
 
-    private static Decimal divide(Decimal x, Decimal divisor, int i) {
-        return null;
+    /** Internal to 'divide'. Assumes non-zero x and k, and hence non-zero result. */
+    private static DdVec multiplyInteger(DdVec src, double k, int base) { //L2677
+        DdVec x = new DdVec(src);
+        double carry = 0;
+
+        for (int i = x.length(); i > 0; i--) {
+            double temp = x.get(i) * k + Math.floor(carry);
+
+            carry = temp / base;
+            double val = temp % base;
+
+            x.set(i, (long)(val));
+        }
+
+        if (carry != 0) x.addFirst(carry);
+        return  x;
     }
 
-    private static Decimal pow(int i, long p) {
-        // IEB: TODO
-        return null;
-    }
-
-    private static double getBase10Exponent(DdVec xd, int xe) {
-        // IEB: TODO
+    /** Internal to 'divide' */
+    private static int compare(DdVec a, DdVec b, int aL, int bL){ // L2693
+        if (aL != bL){ // different scale
+            return aL > bL ? 1 : -1;
+        } else { // same scale, check components from most to least significant
+            for (int i = 0; i < aL; i++){
+                double av = a.get(i);
+                double bv = b.get(i);
+                if (av != bv) return av > bv ? 1 : -1;
+            }
+        }
         return 0;
     }
 
-    /**
-     * Return a new decimal with a not-a-number value
-     */
-    public static Decimal decimalNaN() {
-        Decimal d = new Decimal();
-        d.s = NaN;
-        d.e = NaN;
-        d.d = null;
-        return d;
+    /** Internal to 'divide'. Acts in-place */
+    private static void subtract(DdVec a, DdVec b, int aL, int base){ // L2710
+        int i = 0;
+
+        // Subtract b from a.
+        while (aL --> 0) {
+            a.increment(aL, -i);
+            double av = a.get(aL);
+            double bv = b.get(aL);
+            i = av < bv ? 1 : 0;
+            a.set(aL, i * base + av - bv);
+        }
+        // Remove leading zeros.
+        a.trimLeadingZero();
     }
 
     /**
-     * Create a new decimal by parsing a string value
+     * Perform division in the specified base.
+     * @param x in x/y
+     * @param y in x/y
+     * @param pr precision for result (in significant figures). Use -1 for 'not specified'
+     * @param rm rounding mode
+     * @param dp use decimal places for significant digits?
+     * @param base BIN=2;OCT=8;DEC=10;HEX=16; (positional notation numeric base). Use -1 for default large base.
+     * @return new Decimal result
      */
-    public Decimal(String str) {
-        if (str == null || str.equals("")) { // null or empty strings result in NaN
-            makeNaN();
-            return;
-        }
-        if (str.equals("NaN")) {
-            makeNaN();
-            return;
-        }
-        if (str.equals("Infinity") || str.equals("+Infinity")) {
-            s = 1;
-            makeInfinite();
-            return;
-        }
-        if (str.equals("-Infinity")) {
-            s = -1;
-            makeInfinite();
-            return;
-        }
+    private static Decimal divide(Decimal x, Decimal y, int pr, Rounding rm, boolean dp, int base) {
+        // This is big, and has its own sub-functions. Start at lines 2674 and 2724.
+        // precondition checks
+        if (x.isNaN() || y.isNaN()) return Decimal.decimalNaN();
+        if (x.isInfinity() && y.isInfinity()) return Decimal.decimalNaN();
+        if (x.isZero() && y.isZero()) return Decimal.decimalNaN();
 
-        NumericString nstr = new NumericString(str);
+        int sign = (x.s == y.s) ? 1 : -1;
+        if (x.isZero() || y.isInfinity()) return Decimal.signedZero(sign);
+        if (y.isZero()) return Decimal.signedInfinity(sign);
 
-        if (!nstr.valid) { // badly formed strings result in NaN
-            makeNaN();
-            return;
-        }
+        double e, logBase;
+        DdVec xd = x.d;
+        DdVec yd = y.d;
 
-        s = nstr.sign;
-
-        if (nstr.baseSize == 10) {
-            parseDecimal(this, nstr); // base10 that might be fractional, and might have an exponent
+        if (base > 0){ // L2742
+            logBase = 1;
+            e = x.e - y.e;
         } else {
-            parseOther(this, nstr); // other base, that will be integer without exponent
+            base = (int)Const.BASE;
+            logBase = Const.LOG_BASE;
+            e = Math.floor(x.e / logBase) - Math.floor(y.e / logBase);
         }
-    }
 
-    /**
-     * Create a decimal value as a copy of another
-     */
-    public Decimal(Decimal v) { // L4293
-        s = v.s;
-        if (external) { // if either should be normalised
-            if (v.d == null || v.e > Config.maxE) {
-                // Infinity
-                e = NaN;
-                d = null;
-            } else if (v.e < Config.minE) {
-                // Underflow to zero
-                e = 0;
-                d = DdVec.FromDouble(0);
-            } else {
-                // in range
-                e = v.e;
-                d = new DdVec(v.d.toArray()); // duplicate
+        int yL = yd.length();
+        int xL = xd.length();
+        Decimal q = new Decimal(sign);
+        DdVec qd = new DdVec();
+        q.d = qd;
+
+        // Result exponent may be one less than e.
+        // The digit array of a Decimal from toStringBinary may have trailing zeros.
+        int i;
+        for (i = 0; yd.get(i) == xd.get(i,0.0);) i++;
+        if (yd.get(i) > xd.get(i,0.0)) e--;
+
+        double sd;
+        if (pr <= 0) { // L2762
+            sd = Config.precision;
+            pr = (int)sd;
+            rm = Config.rounding;
+        } else if (dp) {
+            sd = pr + (x.e - y.e) + 1;
+        } else {
+            sd = pr;
+        }
+
+        boolean more;
+        double k, t;
+        if (sd < 0){
+            qd.addLast(1);
+            more = true;
+        } else { // L2774
+            // Convert precision in number of base 10 digits to base 1e7 digits.
+            sd = Math.floor(sd / logBase + 2);
+            i = 0;
+
+            if (yL == 1) {// divisor < 1e7
+                k = 0;
+                double yd0 = yd.get(0);
+                sd++;
+
+                // k is carry
+                for (; (i < xL || k != 0) && (sd > 0); i++, sd--){
+                    t = k * base + (xd.get(i, 0.0));
+                    qd.set(i, Math.floor(t / yd0));
+                    k = Math.floor(t % yd0);
+                }
+
+                more = (k != 0) || (i < xL);
+            } else { // divisor >= 1e7 (L2796)
+                // Normalise xd and yd so highest order digit of yd is >= base/2
+                k = Math.floor(base / (yd.get(0) + 1));
+                if (k > 1) {
+                    yd = multiplyInteger(yd, k, base);
+                    xd = multiplyInteger(xd, k, base);
+                    yL = yd.length();
+                    xL = xd.length();
+                }
+
+                int xi = yL;
+                DdVec rem = xd.slice(0, yL);
+                int remL = rem.length();
+
+                // Add zeros to make remainder as long as divisor.
+                for (; remL < yL; remL++) rem.addLast(0);
+
+                DdVec yz = new DdVec(yd);
+                yz.addFirst(0);
+                double yd0 = yd.get(0);
+                if (yd.get(1) >= (base / 2.0)) yd0++;
+
+                DdVec prod;
+                int prodL;
+                do { // L2821
+                    k=0;
+
+                    int cmp = compare(yd, rem, yL, remL);
+
+                    if (cmp < 0) { // divisor < remainder  (L2828)
+                        // Calculate trial digit, k.
+                        double rem0 = rem.get(0);
+                        if (yL != remL) rem0 = rem0 * base + (rem.get(1,0));
+
+                        // k will be how many times the divisor goes into the current remainder.
+                        k = Math.floor(rem0 / yd0);
+
+                        //  Algorithm:
+                        //  1. product = divisor * trial digit (k)
+                        //  2. if product > remainder: product -= divisor, k--
+                        //  3. remainder -= product
+                        //  4. if product was < remainder at 2:
+                        //    5. compare new remainder and divisor
+                        //    6. If remainder > divisor: remainder -= divisor, k++
+
+                        if (k > 1){ // L2844
+                            if (k >= base) k = base - 1;
+
+                            // product = divisor * trial digit.
+                            prod = multiplyInteger(yd, k, base);
+                            prodL = prod.length();
+                            remL = rem.length();
+                            // Compare product and remainder.
+                            cmp = compare(prod, rem, prodL, remL);
+
+                            // product > remainder.
+                            if (cmp == 1) {
+                                k--;
+                                // Subtract divisor from product.
+                                subtract(prod, yL < prodL ? yz : yd, prodL, base);
+                            }
+                        } else { // L2862
+                            // cmp is -1.
+                            // If k is 0, there is no need to compare yd and rem again below, so change cmp to 1
+                            // to avoid it. If k is 1 there is a need to compare yd and rem again below.
+                            if (k == 0) {cmp = 1; k = 1;}
+                            prod = new DdVec(yd);
+                        } // L2869
+
+                        prodL = prod.length();
+                        if (prodL < remL) prod.addFirst(0);
+
+                        // Subtract product from remainder.
+                        subtract(rem, prod, remL, base);
+
+                        // If product was < previous remainder.
+                        if (cmp == -1) {
+                            remL = rem.length();
+
+                            // Compare divisor and new remainder.
+                            cmp = compare(yd, rem, yL, remL);
+
+                            // If divisor < new remainder, subtract divisor from remainder.
+                            if (cmp < 1) {
+                                k++;
+                                // Subtract divisor from remainder.
+                                subtract(rem, yL < remL ? yz : yd, remL, base);
+                            }
+                        }
+
+                        remL = rem.length();
+                    } else if (cmp == 0){ // L2896
+                        k++;
+                        rem = DdVec.FromDouble(0);
+                    } // else if cmp == 1, k will be 0
+
+                    // Add the next digit, k, to the result array.
+                    qd.set(i, k);
+                    i++;
+
+                    // Update the remainder.
+                    if ((cmp != 0) && (rem.get(0,0) != 0)) {
+                        rem.set(remL, xd.get(xi, 0));
+                        remL++;
+                    } else {
+                        rem = DdVec.FromDouble(xd.get(xi));
+                        remL = 1;
+                    }
+                } while ((xi++ < xL || rem.length() > 0) && (sd-- != 0)); //?? L2911
+
+                more = rem.length() > 0; // L2913
             }
+
+            // Leading zero?
+            qd.trimLeadingZero();
+        } // if (sd < 0) {} else {}
+
+        // logBase is 1 when divide is being used for base conversion.
+        if (logBase == 1) {
+            q.e = e;
+            q.inexact = more;
         } else {
-            e = v.e;
-            d = new DdVec(v.d.toArray()); // duplicate
-        }
-    }
+            // To calculate q.e, first get the number of digits of qd[0].
+            for (i = 1, k = qd.get(0); k >= 10; k /= 10) i++;
+            q.e = i + e * logBase - 1;
 
-    /**
-     * Returns false if the value is infinite or NaN
-     */
-    public boolean isFinite() {
-        return d != null && d.size() > 0 && Double.isFinite(e) && Double.isFinite(s);
-    }
-
-    /**
-     * Return true if the value is zero, but false for non-zero, infinite, or NaN
-     */
-    public boolean isZero() {
-        return d != null && d.size() == 1 && d.get(0) == 0 && e == 0;
-    }
-
-    /**
-     * Return absolute value
-     */
-    public Decimal abs() {
-        Decimal x = new Decimal(this);
-        if (x.s < 0) x.s = 1;
-        return finalise(x, NaN, Config.rounding, false);
-    }
-
-    /**
-     * Return a new Decimal whose value is the value of this Decimal rounded to a whole number in the direction of positive Infinity.
-     */
-    public Decimal ceil() {
-        return finalise(new Decimal(this), this.e + 1, Rounding.ROUND_CEIL, false);
-    }
-
-    /**
-     * Return a new Decimal whose value is the value of this Decimal clamped to the range min..max
-     */
-    public Decimal clamp(Decimal min, Decimal max) {
-        if (min.isNaN() || max.isNaN()) return Decimal.NaN();
-        if (min.gt(max)) return Decimal.NaN();
-        int k = this.cmp(min);
-        if (k < 0) return min;
-        k = this.cmp(max);
-        if (k > 0) return max;
-        return this;
-    }
-
-    /* IEB:TEMP */
-    public boolean gt(Decimal other) {
-        return false;
-    }
-
-    public int cmp(Decimal other) { // decimal.mjs#L242
-        // IEB: CONTINUE HERE
-        if (!this.isFinite() || !other.isFinite()) {
-            if (this.isNaN() || other.isNaN()) return 0;
-            if (this.s != other.s) return (int) this.s;
+            finalise(q, dp ? pr + q.e + 1 : pr, rm, more);
         }
 
-        // IEB: TEMP
-        return 0;
+        return q;
     }
 
-    /**
-     * Return a new decimal with invalid value
-     */
-    public static Decimal NaN() {
-        return new Decimal(NaN);
+    private static Decimal pow(int x, long y) {
+        return new Decimal(x).pow(y);
     }
 
-    /**
-     * Return true if decimal is invalid, false otherwise
-     */
-    public boolean isNaN() {
-        return (d == null || d.size() < 1) && Double.isNaN(s);
-    }
+    private static double getBase10Exponent(DdVec digits, int e) {
+        // L3143
+        double w = digits.get(0);
 
-    /** Display the internal state of this Decimal */
-    public String toRawString() {
-        StringBuilder sb = new StringBuilder();
-
-        sb.append("Sign=");
-        sb.append((int)s);
-
-        sb.append("; Exponent=");
-        if (Double.isFinite(e)) sb.append((long)e);
-        else sb.append(e);
-
-        if (d == null){
-            sb.append("; Digits=<null>;");
-        } else if (d.isEmpty()) {
-            sb.append("; Digits=<empty>;");
-        } else {
-            sb.append("; Digits=");
-            boolean s = false;
-            double[] digits = d.toArray();
-            for (double v : digits) {
-                if (s) sb.append(',');
-                else s = true;
-
-                sb.append('[');
-                sb.append((long)v);
-                sb.append(']');
-            }
-        }
-
-        return sb.toString();
+        // Add the number of digits of the first word of the digits array.
+        for ( e *= Const.LOG_BASE; w >= 10; w /= 10) e++;
+        return e;
     }
 
     /**
@@ -977,7 +1335,7 @@ public class Decimal {
     /**
      * Round `x` to `sd` significant digits using rounding mode `rm`. Check for over/under-flow.
      */
-    private Decimal finalise(Decimal x, double sd, Rounding rm, boolean isTruncated) {
+    private static Decimal finalise(Decimal x, double sd, Rounding rm, boolean isTruncated) {
         // rd: the rounding digit, i.e. the digit after the digit that may be rounded up.
         // w: the word of xd containing rd, a base 1e7 number.
         // xdi: the index of w within xd.
