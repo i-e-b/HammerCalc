@@ -683,6 +683,19 @@ public class Decimal {
     }
 
     /**
+     * Returns true if the value is +infinity
+     */
+    public boolean isPositiveInfinity() {
+        return (d == null || d.length() < 1) && (s >= 1);
+    }
+    /**
+     * Returns true if the value is -infinity
+     */
+    public boolean isNegativeInfinity() {
+        return (d == null || d.length() < 1) && (s <= -1);
+    }
+
+    /**
      * Return true if the value is zero, but false for non-zero, infinite, or NaN
      */
     public boolean isZero() {
@@ -768,13 +781,49 @@ public class Decimal {
      * @param y The power to which to raise this Decimal. */
     public Decimal pow(Decimal y){// L2264
         // Precondition checks
+        if (this.isNaN() || y.isNaN()) return Decimal.decimalNaN();
+        if (y.isPositiveInfinity()) return Decimal.signedInfinity(1);
+        if (y.isNegativeInfinity()) return Decimal.signedZero((int)this.s);
+        if (y.isZero()) return new Decimal(1);
+
+        Decimal x = new Decimal(this);
+        if (x.isInfinity()) return x;
+        if (x.isZero()) return x;
+        if (x.eq(1)) return x;
+
+        double pr = Config.precision;
+        Rounding rm = Config.rounding;
+
+        if (y.eq(1)) return finalise(x, pr, rm, false);
+
+        // y exponent
+        double e = Math.floor(y.e / Const.LOG_BASE);
+
+        long k;
+        // If y is a small integer, use the 'exponentiation by squaring' algorithm.
+        if ((e >= y.d.length() - 1) && (k = yn < 0 ? -yn : yn) <= Const.MAX_SAFE_INTEGER) {
+            Decimal r = intPow(x, k, (int)pr);
+            if (y.s < 0) return new Decimal(1).div(r);
+            else return finalise(r, pr, rm, false);
+        }
 
         // IEB: Continue here
         return Decimal.decimalNaN(); // delete later
     }
 
+    public boolean eq(double other) {
+        // TODO
+        return false;
+    }
+
+    public boolean eq(Decimal other) {
+        // TODO
+        return false;
+    }
+
     /* IEB:TEMP */
     public boolean gt(Decimal other) {
+        // TODO
         return false;
     }
 
@@ -785,6 +834,7 @@ public class Decimal {
             if (this.s != other.s) return (int) this.s;
         }
 
+        // TODO
         // IEB: TEMP
         return 0;
     }
