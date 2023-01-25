@@ -26,7 +26,7 @@ public class Decimal {
          * Default = 20
          * Range = 0..1e9 (Const.MAX_DIGITS)
          */
-        public static double precision = 20;
+        public static int precision = 20;
 
         /**
          * The rounding mode used when rounding to `precision`
@@ -736,6 +736,27 @@ public class Decimal {
         return this;
     }
 
+    /**
+     * Return a new Decimal whose value is the value of this Decimal divided by `y`, rounded to
+     * significant digits Config.precision, using rounding mode Config.rounding.
+     * <p></p>
+     * Special cases:
+     *  n / 0 = I; n / N = N; n / I = 0; 0 / n = 0; 0 / 0 = N; 0 / N = N; 0 / I = 0;
+     *  N / n = N; N / 0 = N; N / N = N; N / I = N; I / n = I; I / 0 = I; I / N = N; I / I = N;
+     *
+     */
+    public Decimal div(Decimal y) {
+        return divide(this, new Decimal(y), Config.precision, Config.rounding, false, -1);
+    }
+
+    /**
+     * Return a new Decimal whose value is the integer part of dividing the value of this Decimal
+     * by the value of `y`, rounded to significant digits Config.precision, using rounding mode Config.rounding.
+     */
+    public Decimal divToInt (Decimal y){
+        return finalise(divide(this, new Decimal(y), 0, Rounding.ROUND_DOWN, true, -1), Config.precision, Config.rounding, false);
+    }
+
     /** Return a new Decimal whose value is this decimal raised to power y, rounded
      * to `precision` significant digits using rounding mode `rounding`.
      * <p>
@@ -799,16 +820,107 @@ public class Decimal {
         // y exponent
         double e = Math.floor(y.e / Const.LOG_BASE);
 
-        long k;
+        double k;
+
         // If y is a small integer, use the 'exponentiation by squaring' algorithm.
-        if ((e >= y.d.length() - 1) && (k = yn < 0 ? -yn : yn) <= Const.MAX_SAFE_INTEGER) {
-            Decimal r = intPow(x, k, (int)pr);
+        double yn = y.toDouble();
+        if ((e >= y.d.length() - 1) && ((k = (long)(yn < 0 ? -yn : yn))) <= Const.MAX_SAFE_INTEGER) {
+            Decimal r = intPow(x, (long)k, (int) pr);
             if (y.s < 0) return new Decimal(1).div(r);
             else return finalise(r, pr, rm, false);
+        }
+        // L2290
+
+        double _s = x.s; // sign
+
+        // if x is negative
+        if (_s < 0){
+            // if y is not an integer
+            if (e < y.d.length() - 1) return Decimal.decimalNaN();
+
+            // Result is positive if x is negative and the last digit of integer y is even.
+            if (((int)y.d.get((int)e) & 1) == 0) _s = 1;
+
+            // if x.eq(-1)
+            if (x.e == 0 && x.d.get(0) == 1 && x.d.length() == 1) {
+                x.s = _s;
+                return x;
+            }
+        }
+
+        // Estimate result exponent.
+        // x^y = 10^e,  where e = y * log10(x)
+        // log10(x) = log10(x_significand) + x_exponent
+        // log10(x_significand) = ln(x_significand) / ln(10)
+        k = Math.pow(x.toDouble(), yn);
+        boolean finiteK = k == 0 || !Double.isFinite(k);
+        if (finiteK){
+            String basex = "0." + digitsToString(x.d);
+            e = Math.floor(yn * (Math.log(Double.parseDouble(basex)) / Math.log(10) + x.e + 1));
+        } else {
+            e = new Decimal(Double.toString(k)).e;
         }
 
         // IEB: Continue here
         return Decimal.decimalNaN(); // delete later
+    }
+
+    private String digitsToString(DdVec d) {
+        int i;
+        long k;
+        int indexOfLastWord = d.length() - 1;
+        double w = d.get(0);
+        String ws;
+        StringBuilder str = new StringBuilder();
+
+        if (indexOfLastWord > 0) {
+            str.append((long)w);
+            for (i = 1; i < indexOfLastWord; i++) {
+                ws = Long.toString((long)d.get(i));
+                k = (long)Const.LOG_BASE - ws.length();
+                if (k != 0) str.append(getZeroString(k));
+                str.append(ws);
+            }
+
+            w = d.get(i);
+            ws = Long.toString((long)w);
+            k = (long)Const.LOG_BASE - ws.length();
+            if (k != 0) str.append(getZeroString(k));
+        } else if (w == 0) {
+            return "0";
+        }
+
+        // Remove trailing zeros of last w.
+        while (w % 10 == 0) w /= 10;
+
+        str.append(w);
+        return str.toString();
+    }
+
+    private static String getZeroString(long k) {
+        StringBuilder zs = new StringBuilder();
+        while (k-->0) zs.append('0');
+        return zs.toString();
+    }
+
+    /** Return this decimal converted to the nearest double value */
+    private double toDouble() {
+        try {
+            return Double.parseDouble(toStringBinary(this, 10, -1, Config.rounding));
+        } catch (Exception ex) {
+            return NaN;
+        }
+    }
+
+    /**
+     * Return the value of Decimal `x` as a string in base `baseOut`.
+     *
+     * If the optional `sd` argument is present include a binary exponent suffix.
+     */
+    private static String toStringBinary(Decimal x, int baseOut, int sd, Rounding rm){
+        // L3790
+        // TODO
+        return "TODO";
     }
 
     public boolean eq(double other) {
@@ -1286,7 +1398,7 @@ public class Decimal {
     }
 
     private static Decimal pow(int x, long y) {
-        return new Decimal(x).pow(y);
+        return new Decimal(x).pow(new Decimal(y));
     }
 
     private static double getBase10Exponent(DdVec digits, int e) {
