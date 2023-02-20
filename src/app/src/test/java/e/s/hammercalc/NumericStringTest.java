@@ -2,6 +2,13 @@ package e.s.hammercalc;
 
 import org.junit.Test;
 
+// Maybe ditch the large decimals, and try a continued fraction setup?
+//
+// https://math.stackexchange.com/questions/3084970/how-to-convert-continued-fractions-into-normal-fractions#3085073
+// https://github.com/amitrubin/R-Arithmetic/blob/main/continued_fractions.js
+// https://mathworld.wolfram.com/RegularContinuedFraction.html
+// https://r-knott.surrey.ac.uk/Fibonacci/cfCALC.html
+
 import static org.junit.Assert.*;
 
 import e.s.hammercalc.core.Decimal;
