@@ -1,5 +1,7 @@
 package e.s.hammercalc.core;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.Arrays;
 
 /**
@@ -46,6 +48,37 @@ public class LargeInt {
 
     /** Return a large int with the same value as 'v' */
     public static LargeInt fromLong(long v){return LargeInt.valueOf(v);}
+
+    /** Return a large int with the value of floor(f) */
+    public static LargeInt fromFloat(double f){
+        //BigDecimal x = new BigDecimal(f);
+
+        if (Double.isInfinite(f) || Double.isNaN(f)) return LARGE_NAN;
+
+        // Translate the double into sign, exponent and significand, according
+        // to the formulae in JLS, Section 20.10.22.
+        long valBits = Double.doubleToLongBits(f);
+        int sign = ((valBits >> 63) == 0 ? 1 : -1);
+        int exponent = (int) ((valBits >> 52) & 0x7ffL);
+        long significand = (exponent == 0
+                ? (valBits & ((1L << 52) - 1)) << 1
+                : (valBits & ((1L << 52) - 1)) | (1L << 52));
+        exponent -= 1075;
+        // At this point, val == sign * significand * 2**exponent.
+
+        if (exponent >= 0) {
+            LargeInt exp = TWO.pow(exponent);
+            return fromInt(sign).multiply(fromLong(significand)).multiply(exp);
+        } else {
+            LargeInt exp = TWO.pow(-exponent);
+            return fromInt(sign).multiply(fromLong(significand)).divide(exp);
+        }
+    }
+
+    /** Return a double that most closely matches this large int */
+    public double toFloat(){
+        return Double.parseDouble(toFloatString(21));
+    }
 
     /** return a large int version of the given long */
     public static LargeInt valueOf(long val) {
@@ -1029,7 +1062,7 @@ public class LargeInt {
     /** return this**exp */
     public LargeInt pow(int exp) {
         if (isNaN()) return LARGE_NAN;
-        if (exp < 0) return LARGE_NAN;
+        if (exp < 0) return ZERO;
         if (_sign == 0) return (exp == 0 ? ONE : this);
 
         LargeInt y, z;

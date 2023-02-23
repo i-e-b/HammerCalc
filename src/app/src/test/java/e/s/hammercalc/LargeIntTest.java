@@ -542,4 +542,25 @@ public class LargeIntTest {
         assertEquals("a!", expectedA, a.factorial());
         assertEquals("b!", expectedB, b.factorial());
     }
+
+    @Test
+    public void can_raise_decimals_to_integer_powers(){
+        LargeInt ten = new LargeInt("10");
+        LargeInt res = new LargeInt("100000");
+
+        assertEquals("10^5", res, ten.pow(5));
+        assertEquals("10^(-5)", LargeInt.ZERO, res.pow(-5)); // would always be fractional
+    }
+
+    @Test
+    public void can_truncate_floating_point_to_large_int(){
+        LargeInt a = LargeInt.fromFloat(123456.78901);
+        assertEquals("a", "123456", a.toString());
+
+        LargeInt b = LargeInt.fromFloat(100000);
+        assertEquals("b", "100000", b.toString());
+
+        LargeInt c = LargeInt.fromFloat(0.5);
+        assertEquals("c", "0", c.toString());
+    }
 }
