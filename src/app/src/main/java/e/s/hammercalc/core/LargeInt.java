@@ -42,10 +42,10 @@ public class LargeInt {
     public static final LargeInt LARGE_NAN = new LargeInt();
 
     /** Return a large int with the same value as 'v' */
-    public static LargeInt FromInt(int v){return LargeInt.valueOf(v);}
+    public static LargeInt fromInt(int v){return LargeInt.valueOf(v);}
 
     /** Return a large int with the same value as 'v' */
-    public static LargeInt FromLong(long v){return LargeInt.valueOf(v);}
+    public static LargeInt fromLong(long v){return LargeInt.valueOf(v);}
 
     /** return a large int version of the given long */
     public static LargeInt valueOf(long val) {
@@ -228,7 +228,6 @@ public class LargeInt {
         return 0;
     }
 
-
     /** Create a large int with a preset byte value (positive sign only) */
     protected LargeInt(byte[] byteVal) {
         if (byteVal.length == 0) {
@@ -267,6 +266,7 @@ public class LargeInt {
 
     /** return the absolute value of this integer */
     public LargeInt abs() {
+        if (isNaN()) return LARGE_NAN;
         return (_sign >= 0) ? this : negate();
     }
 
@@ -296,6 +296,7 @@ public class LargeInt {
 
     /** return this + val */
     public LargeInt add(LargeInt val) {
+        if (isNaN() || val.isNaN()) return LARGE_NAN;
         if (val._sign == 0 || val._magnitude.length == 0) return this;
         if (_sign == 0 || _magnitude.length == 0) return val;
 
@@ -392,6 +393,7 @@ public class LargeInt {
 
     /** return number of bits needed to express this integer */
     public int bitLength() {
+        if (isNaN()) return 0;
         if (_nBitLength == -1) {
             if (_sign == 0) {
                 _nBitLength = 0;
@@ -425,12 +427,18 @@ public class LargeInt {
         return 0;
     }
 
-    /** Return 0 if ints are equal; 1 if 'val' is greater than 'this'; -1 if 'val' is less */
+    /** Return 0 if ints are equal; <p>
+     * -1 if 'val' is greater than 'this'; </p>
+     * 1 if 'val' is less
+     * */
     public int compareTo(LargeInt val) {
+        if (isNaN() || val.isNaN()) return 0;
         if (_sign < val._sign) return -1;
         if (_sign > val._sign) return 1;
 
-        return compareTo(0, _magnitude, 0, val._magnitude);
+        int magc = compareTo(0, _magnitude, 0, val._magnitude);
+        if (_sign < 0) return -magc;
+        return magc;
     }
 
     /**
@@ -522,6 +530,7 @@ public class LargeInt {
 
     /** Divide returning quotient and discarding remainder. If dividing by zero, a value of LARGE_NAN is returned */
     public LargeInt divide(LargeInt val) {
+        if (isNaN() || val.isNaN()) return LARGE_NAN;
         if (val._sign == 0) return LARGE_NAN;
         if (_sign == 0) return ZERO;
 
@@ -567,8 +576,24 @@ public class LargeInt {
         return compareTo(other) == 0;
     }
 
+    /** return the factorial of this int */
+    public LargeInt factorial(){
+        if (isNaN()) return LARGE_NAN;
+        if (_sign == 0) return ONE;
+        if (_sign < 0) return this.abs().factorial();
+
+        LargeInt accum = ONE;
+        LargeInt count = this;
+        while (count.compareTo(ONE) == 1){
+            accum = accum.multiply(count);
+            count = count.subtract(ONE);
+        }
+        return accum;
+    }
+
     /** return the bit position of the lowest bit value set to 1 */
     public int getLowestSetBit() {
+        if (isNaN()) return -1;
         if (equals(ZERO)) return -1;
         int w = _magnitude.length - 1;
 
@@ -589,6 +614,7 @@ public class LargeInt {
 
     /** Find the greatest common denominator of two values */
     public LargeInt gcd(LargeInt val) {
+        if (isNaN() || val.isNaN()) return LARGE_NAN;
         if (val._sign == 0) return abs();
         if (_sign == 0) return val.abs();
 
@@ -634,7 +660,9 @@ public class LargeInt {
         return (compareTo(val) < 0) ? this : val;
     }
 
+    /** return this % m */
     public LargeInt mod(LargeInt m) {
+        if (isNaN() || m.isNaN()) return LARGE_NAN;
         if (m._sign <= 0) return LARGE_NAN;
 
         LargeInt biggie = remainder(m);
@@ -693,6 +721,7 @@ public class LargeInt {
     /** Return modular multiplicative inverse of this and m. `m` must be positive
      * The result 'x' should conform to: (a*x)%m = 1 */
     public LargeInt modInverse(LargeInt m) {
+        if (isNaN() || m.isNaN()) return LARGE_NAN;
         if (m._sign != 1) return LARGE_NAN;
 
         LargeInt x = new LargeInt();
@@ -713,12 +742,10 @@ public class LargeInt {
         return x;
     }
 
-
     /**
      * zero out the array x
      */
     private void zero(int[] x) {Arrays.fill(x, 0);}
-
 
     /**
      * Montgomery multiplication: a = x * y * R^(-1) mod m
@@ -865,6 +892,7 @@ public class LargeInt {
 
     /** return (this**exponent)%m */
     public LargeInt modPow(LargeInt exponent, LargeInt m) {
+        if (isNaN() || m.isNaN() || exponent.isNaN()) return LARGE_NAN;
         int[] qVal = null; // 'Z' in most literature
         int[] rAccum = null; // 'Y' in most literature
 
@@ -975,6 +1003,7 @@ public class LargeInt {
 
     /** return this * val */
     public LargeInt multiply(LargeInt val) {
+        if (isNaN() || val.isNaN()) return LARGE_NAN;
         if (_sign == 0 || val._sign == 0) return ZERO;
 
         int[] res = new int[_magnitude.length + val._magnitude.length];
@@ -984,19 +1013,22 @@ public class LargeInt {
 
     /** return this * val */
     public LargeInt multiply(int val) {
+        if (isNaN()) return LARGE_NAN;
         if (val == 0) return ZERO;
         if (val == 1) return this;
         if (val == -1) return this.negate();
-        return multiply(LargeInt.FromInt(val));
+        return multiply(LargeInt.fromInt(val));
     }
 
     /** reverse sign of value */
     public LargeInt negate() {
+        if (isNaN()) return LARGE_NAN;
         return new LargeInt(-_sign, _magnitude);
     }
 
     /** return this**exp */
     public LargeInt pow(int exp) {
+        if (isNaN()) return LARGE_NAN;
         if (exp < 0) return LARGE_NAN;
         if (_sign == 0) return (exp == 0 ? ONE : this);
 
@@ -1079,6 +1111,7 @@ public class LargeInt {
 
     /** return the remainder of division by val */
     public LargeInt remainder(LargeInt val) {
+        if (isNaN() || val.isNaN()) return LARGE_NAN;
         if (val._sign == 0) return LARGE_NAN;
         if (_sign == 0) return ZERO;
 
@@ -1087,7 +1120,6 @@ public class LargeInt {
         System.arraycopy(_magnitude, 0, res, 0, res.length);
         return new LargeInt(_sign, remainder(res, val._magnitude));
     }
-
 
     /**
      * do a left shift - this returns a new array.
@@ -1129,7 +1161,9 @@ public class LargeInt {
         return newMag;
     }
 
+    /** return this << n */
     public LargeInt shiftLeft(int n) {
+        if (isNaN()) return LARGE_NAN;
         if (_sign == 0 || _magnitude.length == 0) return ZERO;
         if (n == 0) return this;
         if (n < 0) return shiftRight(-n);
@@ -1190,7 +1224,9 @@ public class LargeInt {
         mag[start] = (int)(mag[start] >>> 1);
     }
 
+    /** return this >> n */
     public LargeInt shiftRight(int n) {
+        if (isNaN()) return LARGE_NAN;
         if (n == 0) return this;
         if (n < 0) return shiftLeft(-n);
 
@@ -1239,7 +1275,9 @@ public class LargeInt {
         return x;
     }
 
+    /** return this - val */
     public LargeInt subtract(LargeInt val) {
+        if (isNaN() || val.isNaN()) return LARGE_NAN;
         if (val._sign == 0 || val._magnitude.length == 0) return this;
         if (_sign == 0 || _magnitude.length == 0) return val.negate();
 
@@ -1270,6 +1308,7 @@ public class LargeInt {
 
     /** return true if the bit at offset 'n' is set to 1 */
     public boolean testBit(int n) {
+        if (isNaN()) return false;
         if (n < 0) return false;
 
         if ((n / 32) >= _magnitude.length) {
@@ -1281,6 +1320,7 @@ public class LargeInt {
 
     /** convert to a byte array for storage. Negative values are represented as 2's compliment */
     public byte[] toByteArray() {
+        if (isNaN()) return new byte[0];
         int bitLength = this.bitLength();
         byte[] bytes = new byte[bitLength / 8 + 1];
 
@@ -1319,6 +1359,7 @@ public class LargeInt {
     /** Output a string in 0e1 form with the given precision
      * This is useful for parsing into a floating point value. */
     public String toFloatString(int precision){
+        if (isNaN()) return "";
         String full = this.toString();
         int sign = (_sign < 0) ? 1 : 0;
 
@@ -1363,7 +1404,9 @@ public class LargeInt {
         return toString(10);
     }
 
+    /** output this int as a string at radix 'rdx' (must be 10 or 16) */
     public String toString(int rdx) {
+        if (isNaN()) return "";
         if (_sign == 0) return "0";
 
         StringBuilder s = new StringBuilder();
@@ -1494,10 +1537,12 @@ public class LargeInt {
         return mag;
     }
 
+    /** Return true if this int has a NaN value */
     public boolean isNaN() {
         return _sign == -42 && _magnitude.length == 0;
     }
 
+    /** Return true if this int has a valid value */
     public boolean isValid() {
         return (_sign >= -1 && _sign <= 1) && _magnitude != null;
     }

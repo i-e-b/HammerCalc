@@ -3,7 +3,6 @@ package e.s.hammercalc;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 import org.junit.Test;
 
@@ -12,23 +11,23 @@ import e.s.hammercalc.core.LargeInt;
 public class LargeIntTest {
     @Test
     public void can_create_large_ints_from_primitive_ints(){
-        LargeInt negOneInt = LargeInt.FromInt(-1);
+        LargeInt negOneInt = LargeInt.fromInt(-1);
         assertTrue("negOneInt matches NEG_ONE constant", negOneInt.equals(LargeInt.NEG_ONE));
         assertFalse("negOneInt not isNan", negOneInt.isNaN());
         assertTrue("negOneInt valid", negOneInt.isValid());
 
-        LargeInt longOne = LargeInt.FromLong(1L);
+        LargeInt longOne = LargeInt.fromLong(1L);
         assertTrue("longOne matches ONE constant", longOne.equals(LargeInt.ONE));
         assertFalse("longOne not isNan", longOne.isNaN());
         assertTrue("longOne valid", longOne.isValid());
 
-        LargeInt intMaxInt = LargeInt.FromInt(Integer.MAX_VALUE);
+        LargeInt intMaxInt = LargeInt.fromInt(Integer.MAX_VALUE);
         LargeInt intMaxStr = new LargeInt("7FFFFFFF", 16);
         assertTrue("intMaxInt matches string version", intMaxInt.equals(intMaxStr));
         assertFalse("intMaxInt not isNan", intMaxInt.isNaN());
         assertTrue("intMaxInt valid", intMaxInt.isValid());
 
-        LargeInt longMaxLong = LargeInt.FromLong(Long.MAX_VALUE);
+        LargeInt longMaxLong = LargeInt.fromLong(Long.MAX_VALUE);
         LargeInt longMaxStr = new LargeInt("7FFFFFFFFFFFFFFF", 16);
         assertTrue("longMaxLong matches string version", longMaxLong.equals(longMaxStr));
         assertFalse("longMaxLong not isNan", longMaxLong.isNaN());
@@ -152,9 +151,9 @@ public class LargeIntTest {
         LargeInt d = new LargeInt("10");
         LargeInt e = new LargeInt("10000000000000000000");
 
-        assertEquals("a < b", 1, a.compareTo(b));
+        assertEquals("a < b", -1, a.compareTo(b));
         assertEquals("b = b", 0, b.compareTo(b1));
-        assertEquals("b > a", -1, b.compareTo(a));
+        assertEquals("b > a", 1, b.compareTo(a));
         assertEquals("c > b", 1, c.compareTo(b));
         assertEquals("b < c", -1, b.compareTo(c));
         assertEquals("d > c", 1, d.compareTo(c));
@@ -531,5 +530,16 @@ public class LargeIntTest {
         assertEquals("b // 5", expectedB2, b.toFloatString(5));
         assertEquals("b // 1", expectedB3, b.toFloatString(1));
         assertEquals("c // 5", expectedC, c.toFloatString(5));
+    }
+
+    @Test
+    public void can_take_factorial_of_large_int(){
+        LargeInt a = new LargeInt("12");
+        LargeInt expectedA = new LargeInt("479001600");
+        LargeInt b = new LargeInt("20");
+        LargeInt expectedB = new LargeInt("2432902008176640000");
+
+        assertEquals("a!", expectedA, a.factorial());
+        assertEquals("b!", expectedB, b.factorial());
     }
 }

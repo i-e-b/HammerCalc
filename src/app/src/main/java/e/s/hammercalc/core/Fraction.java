@@ -1,8 +1,10 @@
 package e.s.hammercalc.core;
 
 /**
- * Rational fractions using big numbers
+ * Rational numbers using big integers.
  *
+ * This class uses LargeInt rather than any built-in BigInt libraries,
+ * purely to ensure portability.
  */
 public class Fraction {
 }
