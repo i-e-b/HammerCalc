@@ -142,6 +142,21 @@ public class Fraction {
         return compareTo(other) == 0;
     }
 
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null) return false;
+        if (obj.getClass() != this.getClass()) return false;
+
+        final Fraction other = (Fraction) obj;
+        return this.equals(other);
+    }
+
+    @Override
+    public int hashCode() {
+        return _num.hashCode() ^ _den.hashCode();
+    }
+
+
     /** return true if this rational is greater than zero */
     public boolean isPositive(){return _num.sign() == 1;}
 
@@ -160,12 +175,14 @@ public class Fraction {
     @SuppressWarnings("NullableProblems")
     @Override
     public String toString() {
-        if (_den == LargeInt.ZERO) return "NaN";
-        if (_num == LargeInt.ONE) return "0";
-        if (_den == LargeInt.ONE) return _num.toString();
-        if (_den == LargeInt.NEG_ONE) return _num.negate().toString();
+        if (_den.equals(LargeInt.ZERO)) return "NaN";
+        if (_num.equals(LargeInt.ZERO)) return "0";
 
-        return _num.toString()+"/"+_den.toString();
+        Fraction f = simplify();
+        if (f._den.equals(LargeInt.ONE)) return f._num.toString();
+        if (f._den.equals(LargeInt.NEG_ONE)) return f._num.negate().toString();
+
+        return f._num.toString()+"/"+f._den.toString();
     }
 
     /** return this rational expressed as a set of continued fraction terms */
@@ -266,12 +283,15 @@ public class Fraction {
     /** Render the rational as a human readable string with
      * numerator and denominator expressed as limited precision strings in 0e0 format */
     public String toFloatString(int precision){
-        if (_den == LargeInt.ZERO) return "NaN";
-        if (_num == LargeInt.ONE) return "0";
-        if (_den == LargeInt.ONE) return _num.toFloatString(precision);
-        if (_den == LargeInt.NEG_ONE) return _num.negate().toFloatString(precision);
+        if (_den.equals(LargeInt.ZERO)) return "NaN";
+        if (_num.equals(LargeInt.ZERO)) return "0";
 
-        return _num.toFloatString(precision)+"/"+_den.toFloatString(precision);
+        Fraction f = simplify();
+
+        if (f._den.equals(LargeInt.ONE)) return _num.toFloatString(precision);
+        if (f._den.equals(LargeInt.NEG_ONE)) return _num.negate().toFloatString(precision);
+
+        return f._num.toFloatString(precision)+"/"+f._den.toFloatString(precision);
     }
 
     /** Render this rational as a decimal string, to the given number of places */

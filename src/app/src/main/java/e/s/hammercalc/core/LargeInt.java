@@ -652,8 +652,8 @@ public class LargeInt {
         if (_sign == 0) return val.abs();
 
         LargeInt r;
-        LargeInt u = this;
-        LargeInt v = val;
+        LargeInt u = this.abs();
+        LargeInt v = val.abs();
 
         while (v._sign != 0) {
             r = u.mod(v);
