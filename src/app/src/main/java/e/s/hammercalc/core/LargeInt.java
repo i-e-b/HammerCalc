@@ -1315,7 +1315,7 @@ public class LargeInt {
         if (_sign == 0 || _magnitude.length == 0) return val.negate();
 
         if (val._sign < 0) {
-            if (_sign > 0) return add(val.negate());
+            return add(val.negate());
         } else {
             if (_sign < 0) return add(val.negate());
         }

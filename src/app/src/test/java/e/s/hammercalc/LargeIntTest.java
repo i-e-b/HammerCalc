@@ -514,6 +514,20 @@ public class LargeIntTest {
     }
 
     @Test
+    public void subtracting_by_negative_works(){
+        LargeInt a = new LargeInt("-1");
+        LargeInt b = new LargeInt("-2");
+        LargeInt c = new LargeInt("1");
+        LargeInt _3 = new LargeInt("3");
+        LargeInt _m3 = new LargeInt("-3");
+
+        assertEquals("a - b", c, a.subtract(b));
+        assertEquals("c - b", _3, c.subtract(b));
+        assertEquals("b - a", LargeInt.NEG_ONE, b.subtract(a));
+        assertEquals("b - c", _m3, b.subtract(c));
+    }
+
+    @Test
     public void can_express_large_int_as_a_floating_point_string(){
         LargeInt a = new LargeInt("455360120359063658232420111832819546343520470");
         String expectedA =        "4553601203e35";

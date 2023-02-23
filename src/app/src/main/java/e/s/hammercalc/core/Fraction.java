@@ -15,6 +15,10 @@ public class Fraction {
     public static final Fraction NEG_ONE = new Fraction(LargeInt.NEG_ONE,LargeInt.ONE);
     /** Fraction 1/1 */
     public static final Fraction ONE = new Fraction(LargeInt.ONE,LargeInt.ONE);
+    /** Fraction 1/2 */
+    public static final Fraction HALF = new Fraction(LargeInt.ONE,LargeInt.TWO);
+    /** Fraction -1/2 */
+    public static final Fraction NEG_HALF = new Fraction(LargeInt.NEG_ONE,LargeInt.TWO);
 
     protected Fraction(LargeInt num, LargeInt den){
         if (den.sign() < 0){
@@ -37,6 +41,19 @@ public class Fraction {
         LargeInt d = LargeInt.fromInt(den);
         LargeInt cf = n.gcd(d);
         return new Fraction(n.divide(cf), d.divide(cf));
+    }
+
+    /** new fraction representing <c>i/1</c> */
+    public static Fraction fromInteger(int i){
+        LargeInt n = LargeInt.fromInt(i);
+        LargeInt d = LargeInt.ONE;
+        return new Fraction(n, d);
+    }
+
+    /** new fraction representing <c>i/1</c> */
+    public static Fraction fromInteger(LargeInt n){
+        LargeInt d = LargeInt.ONE;
+        return new Fraction(n, d);
     }
 
     /** return absolute value of this rational */
@@ -154,7 +171,7 @@ public class Fraction {
     /** return this rational expressed as a set of continued fraction terms */
     public LargeInt[] toContinuedFraction() {
         if (this.isZero()) return new LargeInt[0];
-        ObjVec result = new ObjVec();
+        LargeIntVec result = new LargeIntVec();
         Fraction frac = this.inverse();
 
         while (! frac.isZero()){
@@ -162,7 +179,7 @@ public class Fraction {
             result.addLast(frac.truncateToInt());
             frac = frac.mantissa();
         }
-        return (LargeInt[])result.toArray();
+        return result.toArray();
     }
 
     /** return the given continued fraction as a partial fraction decomposition */
@@ -237,13 +254,13 @@ public class Fraction {
     public LargeInt[] floatToContinuedFraction(double x, int n){
         if (n < 1) return new LargeInt[0];
 
-        ObjVec result = new ObjVec();
+        LargeIntVec result = new LargeIntVec();
         for (int i = 0; i < n; i++) {
             LargeInt ip = LargeInt.fromFloat(x);
             result.addLast(ip);
             x = 1.0 / (x - ip.toFloat());
         }
-        return (LargeInt[]) result.toArray();
+        return result.toArray();
     }
 
     /** Render the rational as a human readable string with
