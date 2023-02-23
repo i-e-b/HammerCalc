@@ -10,27 +10,41 @@ import java.util.Arrays;
  */
 @SuppressWarnings({"ForLoopReplaceableByForEach", "ManualArrayCopy"})
 public class LargeInt {
+    // Values of this int
+
     /** -1 means -ve; +1 means +ve; 0 means 0; Any other value is invalid*/
     private int _sign;
     /** array of ints with [0] being the most significant */
     private int[] _magnitude;
 
-    /** cache of bitCount() value. -1 is 'cache dirty' */
-    private int _nBits = -1;
-    /** cache of bitLength() value. -1 is 'cache dirty' */
-    private int _nBitLength = -1;
-    /** mask for lower 32 bits of 64 bit source*/
-    private final long IntMask = 0xFFFFffffL;
-    /**  -m^(-1) mod b, b = 2^32 (for Montgomery multiplication) */
-    private long _mQuote = -1L;
+    // cached values
 
+    /** cache of bitCount() value. -1 is 'cache dirty' */
+    private transient int _nBits = -1;
+    /** cache of bitLength() value. -1 is 'cache dirty' */
+    private transient int _nBitLength = -1;
+    /**  -m^(-1) mod b, b = 2^32 (for Montgomery multiplication) */
+    private transient long _mQuote = -1L;
+
+    /** mask for lower 32 bits of 64 bit source*/
+    private static final long IntMask = 0xFFFFffffL;
+
+    /** Large int = 0 */
     public static final LargeInt ZERO = new LargeInt(0, new byte[0]);
+    /** Large int = -1 */
     public static final LargeInt NEG_ONE = valueOf(1).negate();
+    /** Large int = +1 */
     public static final LargeInt ONE = valueOf(1);
+    /** Large int = +2 */
     public static final LargeInt TWO = valueOf(2);
+
+    /** Large int with an invalid value -- Not A Number */
     public static final LargeInt LARGE_NAN = new LargeInt();
 
+    /** Return a large int with the same value as 'v' */
     public static LargeInt FromInt(int v){return LargeInt.valueOf(v);}
+
+    /** Return a large int with the same value as 'v' */
     public static LargeInt FromLong(long v){return LargeInt.valueOf(v);}
 
     /** return a large int version of the given long */
@@ -101,6 +115,7 @@ public class LargeInt {
         this(sval, 10);
     }
 
+    /** Restore a large int from a magnitude array. Result is always positive */
     public static LargeInt fromByteArray(byte[] compact) {
         return new LargeInt(compact);
     }
@@ -279,6 +294,7 @@ public class LargeInt {
         return a;
     }
 
+    /** return this + val */
     public LargeInt add(LargeInt val) {
         if (val._sign == 0 || val._magnitude.length == 0) return this;
         if (_sign == 0 || _magnitude.length == 0) return val;
@@ -409,6 +425,7 @@ public class LargeInt {
         return 0;
     }
 
+    /** Return 0 if ints are equal; 1 if 'val' is greater than 'this'; -1 if 'val' is less */
     public int compareTo(LargeInt val) {
         if (_sign < val._sign) return -1;
         if (_sign > val._sign) return 1;
@@ -545,6 +562,7 @@ public class LargeInt {
         return biggies;
     }
 
+    /** Return true if both ints have exactly the same value */
     public boolean equals(LargeInt other){
         return compareTo(other) == 0;
     }
@@ -1298,6 +1316,20 @@ public class LargeInt {
         return bytes;
     }
 
+    /** Output a string in 0e1 form with the given precision
+     * This is useful for parsing into a floating point value. */
+    public String toFloatString(int precision){
+        String full = this.toString();
+        int sign = (_sign < 0) ? 1 : 0;
+
+        if (precision < 1) precision = 8;
+        if (full.length() <= precision) return full;
+        precision += sign;
+
+        int exponent = full.length() - precision;
+        return full.substring(0, precision)+"e"+exponent;
+    }
+
     /** convert to a storage format. Can be exactly recovered with 'fromStorage' */
     public byte[] toStorage(){
         if (isNaN() || !isValid()) return new byte[0];
@@ -1332,17 +1364,6 @@ public class LargeInt {
     }
 
     public String toString(int rdx) {
-        String format;
-        switch (rdx) {
-            case 10:
-                format = "d";
-                break;
-            case 16:
-                format = "x";
-                break;
-            default: return "INVALID";
-        }
-
         if (_sign == 0) return "0";
 
         StringBuilder s = new StringBuilder();
@@ -1421,17 +1442,16 @@ public class LargeInt {
 
     private static void nextRndBytes(byte[] bytes) {RandomNumberGenerator.Fill(bytes);}
 
+    /** Bit count of bytes 0..255 */
     private static final byte[] bitCounts = {
-            0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4, 1,
-            2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4,
-            4, 5, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3,
-            4, 3, 4, 4, 5, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 2, 3, 3, 4, 3, 4, 4, 5,
-            3, 4, 4, 5, 4, 5, 5, 6, 3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7, 1, 2, 2, 3, 2,
-            3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 2, 3,
-            3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6,
-            7, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6,
-            5, 6, 6, 7, 3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7, 4, 5, 5, 6, 5, 6, 6, 7, 5,
-            6, 6, 7, 6, 7, 7, 8
+        0, 1, 1, 2, 1, 2, 2, 3,   1, 2, 2, 3, 2, 3, 3, 4,   1, 2, 2, 3, 2, 3, 3, 4,   2, 3, 3, 4, 3, 4, 4, 5,
+        1, 2, 2, 3, 2, 3, 3, 4,   2, 3, 3, 4, 3, 4, 4, 5,   2, 3, 3, 4, 3, 4, 4, 5,   3, 4, 4, 5, 4, 5, 5, 6,
+        1, 2, 2, 3, 2, 3, 3, 4,   2, 3, 3, 4, 3, 4, 4, 5,   2, 3, 3, 4, 3, 4, 4, 5,   3, 4, 4, 5, 4, 5, 5, 6,
+        2, 3, 3, 4, 3, 4, 4, 5,   3, 4, 4, 5, 4, 5, 5, 6,   3, 4, 4, 5, 4, 5, 5, 6,   4, 5, 5, 6, 5, 6, 6, 7,
+        1, 2, 2, 3, 2, 3, 3, 4,   2, 3, 3, 4, 3, 4, 4, 5,   2, 3, 3, 4, 3, 4, 4, 5,   3, 4, 4, 5, 4, 5, 5, 6,
+        2, 3, 3, 4, 3, 4, 4, 5,   3, 4, 4, 5, 4, 5, 5, 6,   3, 4, 4, 5, 4, 5, 5, 6,   4, 5, 5, 6, 5, 6, 6, 7,
+        2, 3, 3, 4, 3, 4, 4, 5,   3, 4, 4, 5, 4, 5, 5, 6,   3, 4, 4, 5, 4, 5, 5, 6,   4, 5, 5, 6, 5, 6, 6, 7,
+        3, 4, 4, 5, 4, 5, 5, 6,   4, 5, 5, 6, 5, 6, 6, 7,   4, 5, 5, 6, 5, 6, 6, 7,   5, 6, 6, 7, 6, 7, 7, 8
     };
     private static final byte[] rndMask = { (byte)255, 127, 63, 31, 15, 7, 3, 1 };
     private static int[] makeMagnitude(byte[] bval, int offset) {
