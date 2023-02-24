@@ -6,6 +6,7 @@ package e.s.hammercalc.core;
  * This class uses LargeInt rather than any built-in BigInt libraries,
  * purely to ensure portability.
  */
+@SuppressWarnings("ForLoopReplaceableByForEach")
 public class Fraction {
     private final LargeInt _num;
     private final LargeInt _den;
@@ -173,7 +174,6 @@ public class Fraction {
         return _num.hashCode() ^ _den.hashCode();
     }
 
-
     /** return true if this rational is greater than zero */
     public boolean isPositive(){return _num.sign() == 1;}
 
@@ -203,53 +203,48 @@ public class Fraction {
     }
 
     /** return this rational expressed as a set of continued fraction terms */
-    public LargeInt[] toContinuedFraction() {
-        if (this.isZero()) return new LargeInt[0];
+    public LargeInt[] toContinuedFractionArray() {
+        int sign = this.compareTo(Fraction.ZERO);
+        if (sign == 0) return new LargeInt[0];
         LargeIntVec result = new LargeIntVec();
-        Fraction frac = this.inverse();
 
-        while (! frac.isZero()){
-            frac = frac.inverse();
-            result.addLast(frac.truncateToInt());
-            frac = frac.mantissa();
+        if (sign > 0) { // positive values
+            Fraction frac = this.inverse();
+
+            while (!frac.isZero()) {
+                frac = frac.inverse();
+                result.addLast(frac.truncateToInt());
+                frac = frac.mantissa();
+            }
+        } else { // negative values
+            // WE want all positive terms beyond the first, so:
+            // Where fr is our fraction, I is the integer part, M is mantissa.
+            // fr = I + M; -fr = -I - M; -fr = -I -1 + (1 - I)
+            LargeInt I = this.truncateToInt().subtract(LargeInt.ONE);
+            Fraction m = Fraction.ONE.subtract(this.negate().mantissa());
+
+            Fraction frac = m.inverse();
+
+            while (!frac.isZero()) {
+                frac = frac.inverse();
+                result.addLast(frac.truncateToInt());
+                frac = frac.mantissa();
+            }
+
+            result.removeFirst(); // should be a zero
+            result.addFirst(I); // put back the integer we sliced
         }
         return result.toArray();
     }
 
-    /** return the given continued fraction as a partial fraction decomposition */
-    public Fraction[] continuedFractionToPartialFractionList(LargeInt[] cfList){
-        LargeInt a = LargeInt.ZERO;
-        LargeInt b = LargeInt.ONE;
-        LargeInt c = LargeInt.ONE;
-        LargeInt d = LargeInt.ZERO;
-        int cfLength = cfList.length;
-
-        ObjVec result = new ObjVec();
-        //noinspection ForLoopReplaceableByForEach
-        for (int i = 0; i < cfLength; i++) {
-            LargeInt tmp;
-            tmp = b;
-            b = cfList[i].multiply(b).add(a);
-            a = tmp;
-
-            tmp = d;
-            d = cfList[i].multiply(d).add(c);
-            c = tmp;
-
-            result.addLast(new Fraction(b,d));
-        }
-        return (Fraction[])result.toArray();
-    }
-
     /** return the given continued fraction approximated as a rational */
-    public Fraction continuedFractionToFraction(LargeInt[] cfList){
+    public static Fraction continuedFractionToFraction(LargeInt[] cfList){
         LargeInt a = LargeInt.ZERO;
         LargeInt b = LargeInt.ONE;
         LargeInt c = LargeInt.ONE;
         LargeInt d = LargeInt.ZERO;
         int cfLength = cfList.length;
 
-        //noinspection ForLoopReplaceableByForEach
         for (int i = 0; i < cfLength; i++) {
             LargeInt tmp;
             tmp = b;
@@ -263,29 +258,8 @@ public class Fraction {
         return new Fraction(b,d).simplify();
     }
 
-    public Fraction continuedRationalsToFraction(Fraction[] rList){
-        Fraction a = Fraction.ZERO;
-        Fraction b = Fraction.ONE;
-        Fraction c = Fraction.ONE;
-        Fraction d = Fraction.ZERO;
-        int rLength = rList.length;
-
-        //noinspection ForLoopReplaceableByForEach
-        for (int i = 0; i < rLength; i++) {
-            Fraction tmp;
-            tmp = b;
-            b = rList[i].multiply(b).add(a);
-            a = tmp;
-
-            tmp = d;
-            d = rList[i].multiply(d).add(c);
-            c = tmp;
-        }
-        return b.divide(d).simplify();
-    }
-
     /** x to a continued fraction with n terms */
-    public LargeInt[] floatToContinuedFraction(double x, int n){
+    public static LargeInt[] floatToContinuedFraction(double x, int n){
         if (n < 1) return new LargeInt[0];
 
         LargeIntVec result = new LargeIntVec();

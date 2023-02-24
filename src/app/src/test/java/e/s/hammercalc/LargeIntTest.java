@@ -22,13 +22,13 @@ public class LargeIntTest {
         assertTrue("longOne valid", longOne.isValid());
 
         LargeInt intMaxInt = LargeInt.fromInt(Integer.MAX_VALUE);
-        LargeInt intMaxStr = new LargeInt("7FFFFFFF", 16);
+        LargeInt intMaxStr = new LargeInt("7FFF_FFFF", 16);
         assertTrue("intMaxInt matches string version", intMaxInt.equals(intMaxStr));
         assertFalse("intMaxInt not isNan", intMaxInt.isNaN());
         assertTrue("intMaxInt valid", intMaxInt.isValid());
 
         LargeInt longMaxLong = LargeInt.fromLong(Long.MAX_VALUE);
-        LargeInt longMaxStr = new LargeInt("7FFFFFFFFFFFFFFF", 16);
+        LargeInt longMaxStr = new LargeInt("7FFF_FFFF_FFFF_FFFF", 16);
         assertTrue("longMaxLong matches string version", longMaxLong.equals(longMaxStr));
         assertFalse("longMaxLong not isNan", longMaxLong.isNaN());
         assertTrue("longMaxLong valid", longMaxLong.isValid());
@@ -59,7 +59,7 @@ public class LargeIntTest {
 
     @Test
     public void can_create_basic_value_large_ints_from_base_16_strings() {
-        LargeInt strHex = new LargeInt("FFFF", 16);
+        LargeInt strHex = new LargeInt("FFff", 16);
         LargeInt strDec = new LargeInt("65535", 10);
         LargeInt intDec = LargeInt.valueOf(65535);
 
@@ -69,7 +69,7 @@ public class LargeIntTest {
 
     @Test
     public void can_create_negative_value_large_ints_from_base_16_strings() {
-        LargeInt strHex = new LargeInt("-FFFF", 16);
+        LargeInt strHex = new LargeInt("-FFff", 16);
         LargeInt strDec = new LargeInt("-65535", 10);
         LargeInt intDec = LargeInt.valueOf(-65535);
 
@@ -119,7 +119,7 @@ public class LargeIntTest {
 
     @Test
     public void large_integer_strings_round_trip_correctly__base16(){
-        String largePositiveStr = "f01dab1efacebeeffeedc1a551f1ab1e";
+        String largePositiveStr = stripSpaces("f01dab1e face beef feed c1a551f1ab1e");
         LargeInt largePositive = new LargeInt(largePositiveStr, 16);
 
         assertEquals("is positive", 1, largePositive.sign());
@@ -130,7 +130,7 @@ public class LargeIntTest {
         String largePositiveResult = largePositive.toString(16);
         assertEquals("positive string should match", largePositiveStr, largePositiveResult);
 
-        String largeNegativeStr = "-f01dab1efacebeeffeedc1a551f1ab1e";
+        String largeNegativeStr = stripSpaces("-f01dab1e face beef feed c1a551f1ab1e");
         LargeInt largeNegative = new LargeInt(largeNegativeStr, 16);
 
         assertEquals("is negative", -1, largeNegative.sign());
@@ -140,6 +140,32 @@ public class LargeIntTest {
 
         String largeNegativeResult = largeNegative.toString(16);
         assertEquals("positive string should match", largeNegativeStr, largeNegativeResult);
+    }
+
+    private String stripSpaces(String src) {
+        StringBuilder dst = new StringBuilder(src.length());
+        for (char c: src.toCharArray()) {
+            if (c == ' ') continue;
+            dst.append(c);
+        }
+        return dst.toString();
+    }
+
+    @Test
+    public void large_integer_string_parsing_ignores_spacing_characters(){
+        String aStr1 = "-284463769211712417218823626827527928431633238741242";
+        String aStr2 = "  -284_463_769,211,712-417-218 823 626.827.527'928'43 16 33 23_87_41_24 2 ";
+        LargeInt a1 = new LargeInt(aStr1);
+        LargeInt a2 = new LargeInt(aStr2);
+
+        assertEquals(a1, a2);
+
+        String bStr1 = "284463769211712417218823626827527928431633238741242";
+        String bStr2 = "  284__463___769211,,,712--417---218 823 626..827..527''''92'843 16  33  238741242";
+        LargeInt b1 = new LargeInt(bStr1);
+        LargeInt b2 = new LargeInt(bStr2);
+
+        assertEquals(b1, b2);
     }
 
     @Test
@@ -232,8 +258,8 @@ public class LargeIntTest {
 
     @Test
     public void can_get_a_byte_array_of_twos_compliment_value(){
-        LargeInt negative = new LargeInt("-FFFFF001", 16);
-        LargeInt positive = new LargeInt( "FFFFF001", 16);
+        LargeInt negative = new LargeInt("-FFFF_F001", 16);
+        LargeInt positive = new LargeInt( "FFFF_F001", 16);
 
         byte[] compact_n = negative.toByteArray();
         byte[] compact_p = positive.toByteArray();

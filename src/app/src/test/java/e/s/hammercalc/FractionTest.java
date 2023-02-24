@@ -1,7 +1,9 @@
 package e.s.hammercalc;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
@@ -236,7 +238,7 @@ public class FractionTest {
     }
 
     @Test
-    public void rationals_can_be_approximated_to_decimal_strings(){
+    public void rationals_can_be_approximated_to_decimal_strings_with_truncation_to_a_specified_precision(){
         Fraction a = Fraction.fromVulgarFraction(1,3);           // decimal's nemesis 0.3 ̅
         Fraction b = Fraction.fromVulgarFraction(456456,987987); // 152/329 -> 0.46200607902735562...
         Fraction c = Fraction.fromVulgarFraction(5,8);           // exactly 0.625
@@ -261,4 +263,58 @@ public class FractionTest {
         assertEquals("b", "859659e18/618687e18", b.toFloatString(6));
         assertEquals("c", "5/4837026793e14", c.toFloatString(10));
     }
+
+    @Test
+    public void can_express_a_rational_fraction_as_a_continued_fraction(){
+        Fraction f1 = Fraction.fromVulgarFraction(5,7); // should be [0;1,2,2] (or [0;1,2,1,1])
+        Fraction f2 = Fraction.fromVulgarFraction(6,8); // should be [0;1,3] (or [0;1,2,1])
+        Fraction f3 = Fraction.fromVulgarFraction(47,17); // should be [2;1,3,4]
+        Fraction f4 = Fraction.fromVulgarFraction(-17,12); // should be [-2;1,1,2,2]
+
+        LargeInt[] expectedF1 = LargeInt.arrayFromInts(0,1,2,2);
+        LargeInt[] expectedF2 = LargeInt.arrayFromInts(0,1,3);
+        LargeInt[] expectedF3 = LargeInt.arrayFromInts(2,1,3,4);
+        LargeInt[] expectedF4 = LargeInt.arrayFromInts(-2,1,1,2,2);
+
+        assertArrayEquals("f1",expectedF1, f1.toContinuedFractionArray());
+        assertArrayEquals("f2",expectedF2, f2.toContinuedFractionArray());
+        assertArrayEquals("f3",expectedF3, f3.toContinuedFractionArray());
+        assertArrayEquals("f4",expectedF4, f4.toContinuedFractionArray());
+    }
+
+    @Test
+    public void can_restore_a_rational_fraction_from_a_rational_continued_fraction(){
+        LargeInt[] cf1 = LargeInt.arrayFromInts(0,1,2,2);
+        LargeInt[] cf2 = LargeInt.arrayFromInts(0,1,3);
+        LargeInt[] cf3 = LargeInt.arrayFromInts(2,1,3,4);
+        LargeInt[] cf4 = LargeInt.arrayFromInts(-2,1,1,2,2);
+
+        Fraction expectedF1 = Fraction.fromVulgarFraction(5,7);
+        Fraction expectedF2 = Fraction.fromVulgarFraction(6,8);
+        Fraction expectedF3 = Fraction.fromVulgarFraction(47,17);
+        Fraction expectedF4 = Fraction.fromVulgarFraction(-17,12);
+
+        assertEquals("cf1",expectedF1, Fraction.continuedFractionToFraction(cf1));
+        assertEquals("cf2",expectedF2, Fraction.continuedFractionToFraction(cf2));
+        assertEquals("cf3",expectedF3, Fraction.continuedFractionToFraction(cf3));
+        assertEquals("cf4",expectedF4, Fraction.continuedFractionToFraction(cf4));
+    }
+
+    @Test
+    public void can_convert_a_floating_point_to_a_continued_fraction(){
+        LargeInt[] cf1 = Fraction.floatToContinuedFraction(0.1875, 3); // 3/16
+        Fraction f1 = Fraction.continuedFractionToFraction(cf1);
+        assertEquals("1", "3/16", f1.toString());
+        assertEquals("2", "0.1875", f1.toDecimalString(4));
+    }
+
+    @Test
+    public void converting_floating_points_to_continued_fraction_exposes_floating_point_problems(){
+        LargeInt[] cf1 = Fraction.floatToContinuedFraction(0.1875, 5); // 0.1875 stores as approx. 0.18750000000000001
+        Fraction f1 = Fraction.continuedFractionToFraction(cf1);
+
+        assertNotEquals("1", "3/16", f1.toString());
+        assertEquals("2", "0.1875", f1.toDecimalString(4));
+    }
+
 }

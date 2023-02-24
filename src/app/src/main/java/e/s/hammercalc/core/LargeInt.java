@@ -1,7 +1,5 @@
 package e.s.hammercalc.core;
 
-import java.math.BigDecimal;
-import java.math.BigInteger;
 import java.util.Arrays;
 
 /**
@@ -75,6 +73,17 @@ public class LargeInt {
         }
     }
 
+    /** convert a set of longs into an array of LargeInts */
+    public static LargeInt[] arrayFromInts(long... values) {
+        if (values.length < 1) return new LargeInt[0];
+
+        LargeInt[] result = new LargeInt[values.length];
+        for (int i = 0; i < values.length; i++) {
+            result[i] = LargeInt.fromLong(values[i]);
+        }
+        return result;
+    }
+
     /** Return a double that most closely matches this large int */
     public double toFloat(){
         return Double.parseDouble(toFloatString(21));
@@ -143,9 +152,9 @@ public class LargeInt {
         }
     }
 
-    /** Parse a stirng into a large in, with base 10 */
-    public LargeInt(String sval){
-        this(sval, 10);
+    /** Parse a string into a large in, with base 10 */
+    public LargeInt(String strVal){
+        this(strVal, 10);
     }
 
     /** Restore a large int from a magnitude array. Result is always positive */
@@ -176,8 +185,8 @@ public class LargeInt {
     }
 
     /** Parse a string into a large int, with the given radix (base number) */
-    public LargeInt(String sval, int rdx) {
-        if (sval.length() == 0) { // NaN valued
+    public LargeInt(String strVal, int rdx) {
+        if (strVal.length() == 0) { // NaN valued
             makeNaN();
             return;
         }
@@ -195,12 +204,12 @@ public class LargeInt {
                 return;
         }
 
-
+        strVal = strVal.trim();
         int index = 0;
         _sign = 1;
 
-        if (sval.charAt(0) == '-') {
-            if (sval.length() == 1) {
+        if (strVal.charAt(0) == '-') {
+            if (strVal.length() == 1) {
                 makeNaN();
                 return;
             }
@@ -210,55 +219,66 @@ public class LargeInt {
         }
 
         // strip leading zeros from the string value
-        while (index < sval.length() && intParse(sval, index, style) == 0) {
+        while (index < strVal.length() && intParse(strVal, index, style) == 0) {
             index++;
         }
 
-        if (index >= sval.length()) {
-            // zero value - we're done
+        if (index >= strVal.length()) {// zero value - we're done
             _sign = 0;
             _magnitude = new int[0];
             return;
         }
 
         // could we work out the max number of ints required to store
-        // sval.length digits in the given base, then allocate that
+        // strVal.length digits in the given base, then allocate that
         // storage in one hit?, then generate the magnitude in one hit too?
         // (optimise this by taking chunks of digits instead?)
 
-        LargeInt b = ZERO;
-        LargeInt r = valueOf(rdx);
-        while (index < sval.length()) {
-            b = b.multiply(r).add(valueOf(intParse(sval, index, style)));
+        LargeInt accum = ZERO;
+        LargeInt radix = valueOf(rdx);
+        while (index < strVal.length()) {
+            int digit = intParse(strVal, index, style);
+            if (digit >= 0) {
+                accum = accum.multiply(radix).add(valueOf(digit));
+            } else if (digit < -1){
+                // fault
+                makeNaN();
+                return;
+            }
             index++;
         }
 
-        _magnitude = b._magnitude;
+        _magnitude = accum._magnitude;
     }
 
-    /** parse a single character as an int value. Returns zero if invalid */
-    private int intParse(String sval, int index, NumberStyles style) {
-        char c = sval.charAt(index);
+    /** parse a single character as an int value.
+     * Returns -1 if char should be ignored. Returns -2 if invalid */
+    private int intParse(String strVal, int index, NumberStyles style) {
+        char c = strVal.charAt(index);
+        // ignore common spacers '_', ' ', '-', '.', ','
+        switch (c){
+            case ' ': case '_': case '-': case '.': case ',': case '\'': return -1;
+        }
         switch (style){
             case Base10:{
                 int v = c - '0';
-                if (v < 0) return 0;
+                if (v < 0) return -2;
                 if (v <= 9) return v;
                 return 0;
             }
             case Base16:{
                 int v = c - '0';
-                if (v < 0) return 0;
+                if (v < 0) return -2;
                 if (v <= 9) return v;
 
                 v = c - 'A';
                 if (v > 5) v = c - 'a';
-                if (v > 5 || v < 0) return 0;
+                if (v > 5 || v < 0) return -2;
 
                 return 10 + v;
             }
         }
-        return 0;
+        return -2;
     }
 
     /** Create a large int with a preset byte value (positive sign only) */
@@ -314,8 +334,7 @@ public class LargeInt {
         while (vI >= 0) {
             m += (a[tI] & IntMask) + (b[vI--] & IntMask);
             a[tI--] = (int)m;
-            //m = (long)((ulong)m >> 32);
-            m = (long)(m >>> 32);
+            m = (long)(m >>> 32);//or `m = (long)((ulong)m >> 32);` if no `>>>`
         }
 
         while (tI >= 0 && m != 0) {
@@ -397,27 +416,27 @@ public class LargeInt {
                 ? (w < 1 << 25 ? (w < 1 << 24 ? 24 : 25) : (w < 1 << 26 ? 26 : 27))
                 : (w < 1 << 29 ? (w < 1 << 28 ? 28 : 29) : (w < 1 << 30 ? 30 : 31)))));
     }
-    private int bitLength(int indx, int[] mag) {
+    private int bitLength(int idx, int[] mag) {
         int bitLength;
         if (mag.length == 0) return 0;
 
-        while (indx != mag.length && mag[indx] == 0) indx++;
+        while (idx != mag.length && mag[idx] == 0) idx++;
 
-        if (indx == mag.length) return 0;
+        if (idx == mag.length) return 0;
 
         // bit length for everything after the first int
-        bitLength = 32 * ((mag.length - indx) - 1);
+        bitLength = 32 * ((mag.length - idx) - 1);
 
-        // and determine bitlength of first int
-        bitLength += bitLen(mag[indx]);
+        // and determine bit length of first int
+        bitLength += bitLen(mag[idx]);
 
         if (_sign < 0) {
             // Check if magnitude is a power of two
-            boolean pow2 = ((bitCounts[mag[indx] & 0xff])
-                    + (bitCounts[(mag[indx] >> 8) & 0xff])
-                    + (bitCounts[(mag[indx] >> 16) & 0xff]) + (bitCounts[(mag[indx] >> 24) & 0xff])) == 1;
+            boolean pow2 = ((bitCounts[mag[idx] & 0xff])
+                    + (bitCounts[(mag[idx] >> 8) & 0xff])
+                    + (bitCounts[(mag[idx] >> 16) & 0xff]) + (bitCounts[(mag[idx] >> 24) & 0xff])) == 1;
 
-            for (int i = indx + 1; i < mag.length && pow2; i++) pow2 = (mag[i] == 0);
+            for (int i = idx + 1; i < mag.length && pow2; i++) pow2 = (mag[i] == 0);
             bitLength -= (pow2 ? 1 : 0);
         }
 
@@ -442,17 +461,17 @@ public class LargeInt {
      * unsigned comparison on two arrays - note the arrays may
      * start with leading zeros.
      */
-    private int compareTo(int xIndx, int[] x, int yIndx, int[] y) {
-        while (xIndx != x.length && x[xIndx] == 0) xIndx++;
-        while (yIndx != y.length && y[yIndx] == 0) yIndx++;
+    private int compareTo(int xIdx, int[] x, int yIdx, int[] y) {
+        while (xIdx != x.length && x[xIdx] == 0) xIdx++;
+        while (yIdx != y.length && y[yIdx] == 0) yIdx++;
 
-        if ((x.length - xIndx) < (y.length - yIndx)) return -1;
-        if ((x.length - xIndx) > (y.length - yIndx)) return 1;
+        if ((x.length - xIdx) < (y.length - yIdx)) return -1;
+        if ((x.length - xIdx) > (y.length - yIdx)) return 1;
 
         // lengths of magnitudes the same, test the magnitude values
-        while (xIndx < x.length) {
-            long v1 = x[xIndx++] & IntMask;
-            long v2 = y[yIndx++] & IntMask;
+        while (xIdx < x.length) {
+            long v1 = x[xIdx++] & IntMask;
+            long v2 = y[yIdx++] & IntMask;
             if (v1 < v2) return -1;
             if (v1 > v2) return 1;
         }
@@ -469,9 +488,9 @@ public class LargeInt {
         if (_sign < val._sign) return -1;
         if (_sign > val._sign) return 1;
 
-        int magc = compareTo(0, _magnitude, 0, val._magnitude);
-        if (_sign < 0) return -magc;
-        return magc;
+        int mag = compareTo(0, _magnitude, 0, val._magnitude);
+        if (_sign < 0) return -mag;
+        return mag;
     }
 
     /**
@@ -927,10 +946,10 @@ public class LargeInt {
     public LargeInt modPow(LargeInt exponent, LargeInt m) {
         if (isNaN() || m.isNaN() || exponent.isNaN()) return LARGE_NAN;
         int[] qVal = null; // 'Z' in most literature
-        int[] rAccum = null; // 'Y' in most literature
+        int[] accum = null; // 'Y' in most literature
 
         // Montgomery exponentiation is only possible if the modulus is odd,
-        // but AFAIK, this is always the case for crypto algo's
+        // but AFAIK, this is always the case for crypto algorithms
         boolean useMonty = ((m._magnitude[m._magnitude.length - 1] & 1) == 1);
         long mQ = 0;
         if (useMonty) {
@@ -943,7 +962,7 @@ public class LargeInt {
             useMonty = (qVal.length == m._magnitude.length);
 
             if (useMonty) {
-                rAccum = new int[m._magnitude.length + 1];
+                accum = new int[m._magnitude.length + 1];
             }
         }
 
@@ -959,7 +978,7 @@ public class LargeInt {
                 System.arraycopy(tmp._magnitude, 0, qVal, qVal.length - tmp._magnitude.length, tmp._magnitude.length);
             }
 
-            rAccum = new int[m._magnitude.length * 2];
+            accum = new int[m._magnitude.length * 2];
         }
 
         int[] rVal = new int[m._magnitude.length];
@@ -986,24 +1005,24 @@ public class LargeInt {
                     // Montgomery square algo doesn't exist, and a normal
                     // square followed by a Montgomery reduction proved to
                     // be almost as heavy as a Montgomery multiply.
-                    multiplyMonty(rAccum, rVal, rVal, m._magnitude, mQ);
+                    multiplyMonty(accum, rVal, rVal, m._magnitude, mQ);
                 } else {
-                    square(rAccum, rVal);
-                    remainder(rAccum, m._magnitude);
-                    System.arraycopy(rAccum, rAccum.length - rVal.length, rVal, 0, rVal.length);
-                    zero(rAccum);
+                    square(accum, rVal);
+                    remainder(accum, m._magnitude);
+                    System.arraycopy(accum, accum.length - rVal.length, rVal, 0, rVal.length);
+                    zero(accum);
                 }
 
                 bits++;
 
                 if (v < 0) {
                     if (useMonty) {
-                        multiplyMonty(rAccum, rVal, qVal, m._magnitude, mQ);
+                        multiplyMonty(accum, rVal, qVal, m._magnitude, mQ);
                     } else {
-                        multiply(rAccum, rVal, qVal);
-                        remainder(rAccum, m._magnitude);
-                        System.arraycopy(rAccum, rAccum.length - rVal.length, rVal, 0, rVal.length);
-                        zero(rAccum);
+                        multiply(accum, rVal, qVal);
+                        remainder(accum, m._magnitude);
+                        System.arraycopy(accum, accum.length - rVal.length, rVal, 0, rVal.length);
+                        zero(accum);
                     }
                 }
 
@@ -1012,12 +1031,12 @@ public class LargeInt {
 
             while (bits < 32) {
                 if (useMonty) {
-                    multiplyMonty(rAccum, rVal, rVal, m._magnitude, mQ);
+                    multiplyMonty(accum, rVal, rVal, m._magnitude, mQ);
                 } else {
-                    square(rAccum, rVal);
-                    remainder(rAccum, m._magnitude);
-                    System.arraycopy(rAccum, rAccum.length - rVal.length, rVal, 0, rVal.length);
-                    zero(rAccum);
+                    square(accum, rVal);
+                    remainder(accum, m._magnitude);
+                    System.arraycopy(accum, accum.length - rVal.length, rVal, 0, rVal.length);
+                    zero(accum);
                 }
 
                 bits++;
@@ -1028,7 +1047,7 @@ public class LargeInt {
             // Return y * R^(-1) mod m by doing y * 1 * R^(-1) mod m
             zero(qVal);
             qVal[qVal.length - 1] = 1;
-            multiplyMonty(rAccum, rVal, qVal, m._magnitude, mQ);
+            multiplyMonty(accum, rVal, qVal, m._magnitude, mQ);
         }
 
         return new LargeInt(1, rVal);
@@ -1320,23 +1339,23 @@ public class LargeInt {
             if (_sign < 0) return add(val.negate());
         }
 
-        LargeInt bigun, littlun;
+        LargeInt large, small;
         int compare = compareTo(val);
         if (compare == 0) return ZERO;
 
         if (compare < 0) {
-            bigun = val;
-            littlun = this;
+            large = val;
+            small = this;
         } else {
-            bigun = this;
-            littlun = val;
+            large = this;
+            small = val;
         }
 
-        int[] res = new int[bigun._magnitude.length];
+        int[] res = new int[large._magnitude.length];
 
-        System.arraycopy(bigun._magnitude, 0, res, 0, res.length);
+        System.arraycopy(large._magnitude, 0, res, 0, res.length);
 
-        return new LargeInt(_sign * compare, subtract(0, res, 0, littlun._magnitude));
+        return new LargeInt(_sign * compare, subtract(0, res, 0, small._magnitude));
     }
 
     /** return true if the bit at offset 'n' is set to 1 */
@@ -1452,7 +1471,7 @@ public class LargeInt {
                 s.append(h);
             }
         } else {
-            // This is algorithm 1a from chapter 4.4 in Seminumerical Algorithms, slow but it works
+            // This is algorithm 1a from chapter 4.4 in Semi-numerical Algorithms, slow but it works
             ObjVec S = new ObjVec();
             LargeInt bs = new LargeInt(Integer.toString(rdx));
             // The sign is handled separately.
@@ -1530,29 +1549,28 @@ public class LargeInt {
         3, 4, 4, 5, 4, 5, 5, 6,   4, 5, 5, 6, 5, 6, 6, 7,   4, 5, 5, 6, 5, 6, 6, 7,   5, 6, 6, 7, 6, 7, 7, 8
     };
     private static final byte[] rndMask = { (byte)255, 127, 63, 31, 15, 7, 3, 1 };
-    private static int[] makeMagnitude(byte[] bval, int offset) {
+    private static int[] makeMagnitude(byte[] bytes, int offset) {
         int i;
         int[] mag;
-        int firstSignificant;
-        @SuppressWarnings("unused") int leadingZero = 0;
+        int firstSignificant = offset;
 
         // strip leading zeros
-        for (firstSignificant = offset; firstSignificant < bval.length && bval[firstSignificant] == 0; firstSignificant++) {
-            leadingZero++;
+        while (firstSignificant < bytes.length && bytes[firstSignificant] == 0){
+            firstSignificant++;
         }
 
-        if (firstSignificant >= bval.length) return new int[0];
-        int nInts = (bval.length - firstSignificant + 3) / 4;
-        int bCount = (bval.length - firstSignificant) % 4;
+        if (firstSignificant >= bytes.length) return new int[0];
+        int nInts = (bytes.length - firstSignificant + 3) / 4;
+        int bCount = (bytes.length - firstSignificant) % 4;
         if (bCount == 0)
             bCount = 4;
 
         mag = new int[nInts];
         int v = 0;
         int magnitudeIndex = 0;
-        for (i = firstSignificant; i < bval.length; i++) {
+        for (i = firstSignificant; i < bytes.length; i++) {
             v <<= 8;
-            v |= bval[i] & 0xff;
+            v |= bytes[i] & 0xff;
             bCount--;
             if (bCount <= 0)
             {
