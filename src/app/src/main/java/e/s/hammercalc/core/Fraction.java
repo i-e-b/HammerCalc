@@ -103,6 +103,18 @@ public class Fraction {
         return new Fraction(a, c);
     }
 
+    /** return (num/s)/(den/s) */
+    public Fraction reduce(LargeInt s){
+        LargeInt n = _num.divide(s);
+        LargeInt d = _den.divide(s);
+        return new Fraction(n, d);
+    }
+
+    /** absolute distance between 2 fractions */
+    public Fraction distance(Fraction other){
+        return this.subtract(other).abs();
+    }
+
     /** return this ** val
      * For fractional powers and square roots, see the continued fractions */
     public Fraction pow(int n){
@@ -310,5 +322,10 @@ public class Fraction {
         }
 
         return result.toString();
+    }
+
+    /** Returns true if BOTH numerator and denominator are greater than 'mag' */
+    public boolean overMagnitude(LargeInt mag) {
+        return (_num.compareTo(mag) < 1) && (_den.compareTo(mag) < 1);
     }
 }

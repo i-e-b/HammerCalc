@@ -37,6 +37,8 @@ public class LargeInt {
     public static final LargeInt ONE = valueOf(1);
     /** Large int = +2 */
     public static final LargeInt TWO = valueOf(2);
+    /** Large int = +10 */
+    public static final LargeInt TEN = valueOf(10);
 
     /** Large int with an invalid value -- Not A Number */
     public static final LargeInt LARGE_NAN = new LargeInt();

@@ -37,6 +37,15 @@ public class LargeIntVec {
      */
     private static final int MIN_INITIAL_CAPACITY = 8;
 
+    /** return a vector of large ints from a set of ints */
+    public static LargeIntVec fromInts(long... ints) {
+        LargeIntVec result = new LargeIntVec(ints.length);
+        for (long i : ints) {
+            result.addLast(LargeInt.fromLong(i));
+        }
+        return result;
+    }
+
     // ******  Array allocation and resizing utilities ******
 
     /**
@@ -479,6 +488,36 @@ public class LargeIntVec {
         }
     }
 
+    /** remove pairs of zero-valued items from start, in place */
+    public void trimLeadingZeroPairs(){
+        while (length() > 1){
+            if (   (this.get(0).isZero())
+                && (this.get(1).isZero())) {
+                this.removeFirst();
+                this.removeFirst();
+            } else return;
+        }
+    }
+
+    /** return a new vector with all pairs of zeros removed */
+    public LargeIntVec trimZeroPairs(){
+        int len = length();
+        if (len < 2) return this;
+        LargeIntVec result = new LargeIntVec(this.length());
+
+        int i;
+        for (i = 1; i < len; i++) {
+            if (get(i).isZero() && get(i-1).isZero()){
+                i++; // skip this and prev
+                continue;
+            }
+            result.addLast(get(i-1));
+        }
+        if (i == len) result.addLast(getLast());
+
+        return result;
+    }
+
     /** reverse the order of items in this vector, without moving head or tail pointers */
     public void reverse() {
         if (length() < 2) return;
@@ -514,5 +553,22 @@ public class LargeIntVec {
             result.addLast(get(i));
         }
         return result;
+    }
+
+    @SuppressWarnings("NullableProblems")
+    @Override
+    public String toString() {
+        int len = length();
+        StringBuilder sb = new StringBuilder(len * 5); // random guess
+
+        sb.append('[');
+
+        for (int i = 0; i < len; i++) {
+            if (i > 0) sb.append(',');
+            sb.append(get(i).toString());
+        }
+        sb.append(']');
+
+        return sb.toString();
     }
 }
