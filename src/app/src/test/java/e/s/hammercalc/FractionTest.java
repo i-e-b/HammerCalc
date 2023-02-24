@@ -169,4 +169,96 @@ public class FractionTest {
         assertEquals("inv(b) = 9/2415584528", "9/2415584528", b.inverse().toString());
         assertEquals("inv(b) = 9/24e8", "9/24e8", b.inverse().toFloatString(2));
     }
+
+    @Test
+    public void powers_of_rationals(){
+        Fraction a = Fraction.fromVulgarFraction(3,5);
+        Fraction expected1 = Fraction.fromVulgarFraction(27,125);
+        Fraction expected2 = Fraction.fromVulgarFraction(125,27);
+        Fraction expected3 = Fraction.fromVulgarFraction(3125,243);
+
+        assertEquals("(3/5)**0", Fraction.ONE, a.pow(0));  // x -> 1
+        assertEquals("(3/5)**3", expected1, a.pow(3));     // 0.6 -> 0.2
+        assertEquals("(3/5)**(-3)", expected2, a.pow(-3)); // 0.6 -> 2.7
+        assertEquals("(3/5)**(-5)", expected3, a.pow(-5)); // 0.6 -> 13
+    }
+
+    @Test
+    public void mantissa_gives_the_fractional_part_of_a_vulgar_fraction(){
+        Fraction a = Fraction.fromVulgarFraction(11, 63); // all fractional part
+        Fraction b = Fraction.fromVulgarFraction(128, 64); // no fractional part
+        Fraction c = Fraction.fromVulgarFraction(128, 65); // mixed- a true 'vulgar' fraction
+        Fraction d = Fraction.fromVulgarFraction(-25, 11);
+
+        assertEquals("m(11/63)", "11/63", a.mantissa().toString());
+        assertEquals("m(128/64)", "0", b.mantissa().toString());
+        assertEquals("m(128/65)", "63/65", c.mantissa().toString());
+        assertEquals("m(-25/11)", "-3/11", d.mantissa().toString());
+    }
+
+    @Test
+    public void truncate_gives_the_integer_part_of_a_vulgar_fraction(){
+        Fraction a = Fraction.fromVulgarFraction(11, 63); // all fractional part
+        Fraction b = Fraction.fromVulgarFraction(128, 64); // no fractional part
+        Fraction c = Fraction.fromVulgarFraction(128, 65); // mixed- a true 'vulgar' fraction
+        Fraction d = Fraction.fromVulgarFraction(-25, 11);
+
+        assertEquals("t(11/63)", Fraction.ZERO, a.truncate());
+        assertEquals("t(128/64)", "2", b.truncate().toString());
+        assertEquals("t(128/65)", Fraction.ONE, c.truncate());
+        assertEquals("t(-25/11)", "-2", d.truncate().toString());
+    }
+
+    @Test
+    public void truncateToInt_gives_the_integer_part_of_a_vulgar_fraction(){
+        Fraction a = Fraction.fromVulgarFraction(11, 63); // all fractional part
+        Fraction b = Fraction.fromVulgarFraction(128, 64); // no fractional part
+        Fraction c = Fraction.fromVulgarFraction(128, 65); // mixed- a true 'vulgar' fraction
+        Fraction d = Fraction.fromVulgarFraction(-25, 11);
+
+        assertEquals("t(11/63)", LargeInt.ZERO, a.truncateToInt());
+        assertEquals("t(128/64)", LargeInt.TWO, b.truncateToInt());
+        assertEquals("t(128/65)", LargeInt.ONE, c.truncateToInt());
+        assertEquals("t(-25/11)", LargeInt.fromInt(-2), d.truncateToInt());
+    }
+
+    @Test
+    public void simplify_reduces_fractions_by_their_greatest_common_denominator(){
+        Fraction a = Fraction.fromVulgarFraction(55, 315); // 11/63
+        Fraction b = Fraction.fromVulgarFraction(32, 128); // 1/4
+        Fraction c = Fraction.fromVulgarFraction("15360", "7800"); // 128/65
+        Fraction d = Fraction.fromVulgarFraction(-675, 297); // -25/11
+
+        assertEquals("55/315", "11/63", a.simplify().toString()); // 'toString' does a simplify anyway
+        assertEquals("32/128", "1/4", b.simplify().toString());
+        assertEquals("15360/7800", "128/65", c.simplify().toString());
+        assertEquals("-675/297", "-25/11", d.simplify().toString());
+    }
+
+    @Test
+    public void rationals_can_be_approximated_to_decimal_strings(){
+        Fraction a = Fraction.fromVulgarFraction(1,3);           // decimal's nemesis 0.3 ̅
+        Fraction b = Fraction.fromVulgarFraction(456456,987987); // 152/329 -> 0.46200607902735562...
+        Fraction c = Fraction.fromVulgarFraction(5,8);           // exactly 0.625
+        Fraction d = Fraction.fromVulgarFraction(29,8);          // exactly 3.625
+        Fraction e = Fraction.fromVulgarFraction("859659751656285302520311", "3"); // 2.865532505520951e23
+
+        assertEquals("1/3: 4", "0.3333", a.toDecimalString(4));
+        assertEquals("152/329: 3", "0.462", b.toDecimalString(3));
+        assertEquals("152/329: 8", "0.46200607", b.toDecimalString(8)); // output is truncated, not rounded
+        assertEquals("5/8: 10", "0.625", c.toDecimalString(10)); // stop outputting digits if we get an exact value
+        assertEquals("29/8: 10", "3.625", d.toDecimalString(10));
+        assertEquals("859659751656285302520311/3: 30", "286553250552095100840103.66", e.toDecimalString(2));
+    }
+
+    @Test
+    public void rationals_can_be_approximated_to_floating_rationals(){
+        Fraction a = Fraction.fromVulgarFraction("859659751656285302520311", "3");
+        Fraction b = Fraction.fromVulgarFraction("859659751656285302520311", "618687072559368554063371");
+        Fraction c = Fraction.fromVulgarFraction("5", "483702679370754995920693");
+
+        assertEquals("a", "8596e20/3", a.toFloatString(4));
+        assertEquals("b", "859659e18/618687e18", b.toFloatString(6));
+        assertEquals("c", "5/4837026793e14", c.toFloatString(10));
+    }
 }

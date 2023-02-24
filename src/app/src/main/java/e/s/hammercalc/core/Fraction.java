@@ -7,7 +7,8 @@ package e.s.hammercalc.core;
  * purely to ensure portability.
  */
 public class Fraction {
-    private LargeInt _num, _den;
+    private final LargeInt _num;
+    private final LargeInt _den;
 
     /** Fraction 0/1 */
     public static final Fraction ZERO = new Fraction(LargeInt.ZERO,LargeInt.ONE);
@@ -35,6 +36,15 @@ public class Fraction {
         LargeInt cf = num.gcd(den);
         return new Fraction(num.divide(cf), den.divide(cf));
     }
+
+    /** new fraction representing <c>num/den</c> */
+    public static Fraction fromVulgarFraction(String num, String den){
+        LargeInt n = new LargeInt(num);
+        LargeInt d = new LargeInt(den);
+        LargeInt cf = n.gcd(d);
+        return new Fraction(n.divide(cf), d.divide(cf));
+    }
+
     /** new fraction representing <c>num/den</c> */
     public static Fraction fromVulgarFraction(int num, int den){
         LargeInt n = LargeInt.fromInt(num);
@@ -92,12 +102,19 @@ public class Fraction {
         return new Fraction(a, c);
     }
 
-    /** return this ** val */
+    /** return this ** val
+     * For fractional powers and square roots, see the continued fractions */
     public Fraction pow(int n){
-        int np = n >= 0 ? n : -n;
-        LargeInt a = _num.pow(np);
-        LargeInt c = _den.pow(np);
-        return new Fraction(a, c);
+        if (n == 0) return ONE;
+        if (n > 0) {
+            LargeInt a = _num.pow(n);
+            LargeInt c = _den.pow(n);
+            return new Fraction(a, c);
+        } else {
+            LargeInt a = _num.pow(-n);
+            LargeInt c = _den.pow(-n);
+            return new Fraction(c, a);
+        }
     }
 
     /** return a rational that expresses the fractional part of the value */
@@ -182,7 +199,7 @@ public class Fraction {
         if (f._den.equals(LargeInt.ONE)) return f._num.toString();
         if (f._den.equals(LargeInt.NEG_ONE)) return f._num.negate().toString();
 
-        return f._num.toString()+"/"+f._den.toString();
+        return f._num.toString() + "/" + f._den;
     }
 
     /** return this rational expressed as a set of continued fraction terms */
@@ -304,6 +321,9 @@ public class Fraction {
         result.append(truncateToInt().toString());
 
         Fraction frac = this.mantissa();
+        if (frac.isZero()) return result.toString();
+
+        result.append('.');
 
         LargeInt i = LargeInt.ZERO;
         LargeInt a = frac._num.multiply(10);
@@ -312,7 +332,9 @@ public class Fraction {
             LargeInt d = a.divide(b);
             result.append(d.toString());
             a = (a.subtract(d.multiply(b))).multiply(10);
+            if (a.isZero()) break; // terminate if we get an exact decimal
         }
+
         return result.toString();
     }
 }

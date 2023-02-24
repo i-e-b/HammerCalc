@@ -514,6 +514,17 @@ public class LargeIntTest {
     }
 
     @Test
+    public void zero_is_zero(){
+        LargeInt a = new LargeInt("724675358467671744377633");
+        LargeInt b = new LargeInt("0");
+        LargeInt c = new LargeInt("859659751656285302520311");
+
+        assertFalse("a != 0", a.isZero());
+        assertTrue("b = 0", b.isZero());
+        assertTrue("c-c = 0", c.subtract(c).isZero());
+    }
+
+    @Test
     public void subtracting_by_negative_works(){
         LargeInt a = new LargeInt("-1");
         LargeInt b = new LargeInt("-2");

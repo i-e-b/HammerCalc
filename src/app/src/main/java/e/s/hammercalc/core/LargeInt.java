@@ -1579,4 +1579,8 @@ public class LargeInt {
     public boolean isValid() {
         return (_sign >= -1 && _sign <= 1) && _magnitude != null;
     }
+
+    public boolean isZero() {
+        return _sign == 0 && _magnitude.length < 1;
+    }
 }
