@@ -92,4 +92,21 @@ public class ContinuedFractionTest {
         fail("Not yet implemented");
     }
 
+    @Test
+    public void general_to_simple(){
+        ContinuedFraction cf1 = ContinuedFraction.Constants.C_PiUnder4();
+        ContinuedFraction.CfSimplifier pU4 = cf1.Simplify();
+
+        // 4/pi => 1.2732395447351626863 => 6741806123/5421409605
+        // pi/4 -> 5421409605/6741806123
+        // pi -> 21685638420/6741806123 (approx. 3.216591818921993)
+        for (int i = 0; i < 100; i++) {
+            LargeInt x = pU4.getLeft();
+            System.out.print(x);
+            System.out.print(", ");
+            pU4.next();
+        }
+
+        // better would be [3; 7, 15, 1, 292, 1 ...]
+    }
 }

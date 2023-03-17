@@ -346,6 +346,16 @@ public class LargeInt {
         return a;
     }
 
+    /** return this - 1 */
+    public LargeInt decrement() {
+        return this.subtract(ONE);
+    }
+
+    /** return this + 1 */
+    public LargeInt increment() {
+        return this.add(ONE);
+    }
+
     /** return this + val */
     public LargeInt add(LargeInt val) {
         if (isNaN() || val.isNaN()) return LARGE_NAN;
@@ -1601,4 +1611,5 @@ public class LargeInt {
     public boolean isZero() {
         return _sign == 0 && _magnitude.length < 1;
     }
+
 }

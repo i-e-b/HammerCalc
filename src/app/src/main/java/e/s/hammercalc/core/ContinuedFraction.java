@@ -1,63 +1,253 @@
 package e.s.hammercalc.core;
+///////////////////////////////////////////////////////////////////////////////////////////////
+// NOTE
+//
+// This file is a mess, and probably will remain so while I am learning continued
+// fractions, with their various variants.
+// Nothing is here is likely to be "correct" unless covered by multiple tests.
+///////////////////////////////////////////////////////////////////////////////////////////////
 
-/** source for repeating terms of a continued fraction */
-interface ITermExpansion{
-    /** Number of terms remaining. Use {@code -1} for unknown or infinite */
+public class ContinuedFraction {
+
+    public static class Constants {
+        public static ContinuedFraction C_PiUnder4(){
+            return new ContinuedFraction(new PiUnder4());
+        }
+    }
+
+    private CFGeneralTerms _terms;
+
+    public ContinuedFraction(CFGeneralTerms terms) {
+        _terms = terms;
+    }
+
+    public CfSimplifier Simplify() {
+        return new CfSimplifier(_terms);
+    }
+
+    public class CfSimplifier implements CFSimpleTerms {
+        LargeInt a, b, c, d, nextValue;
+        CFGeneralTerms source;
+        boolean moreTerms;
+
+        public CfSimplifier(CFGeneralTerms source) {
+            this.source = source;
+            moreTerms = true;
+            a = LargeInt.ZERO;
+            b = LargeInt.ONE;
+            c = LargeInt.ONE;
+            d = LargeInt.ZERO;
+            nextValue = LargeInt.ZERO;
+            next();
+        }
+
+        @Override
+        public LargeInt getLeft() {
+            return nextValue;
+        }
+
+        @Override
+        public boolean next() {
+            if (!moreTerms) return false;
+
+            while (moreTerms) {
+                LargeInt p = source.getLeft();
+                LargeInt q = source.getOver();
+
+                LargeInt a1 = b.multiply(q);
+                LargeInt b1 = b.multiply(p).add(a);
+                LargeInt c1 = d.multiply(q);
+                LargeInt d1 = d.multiply(p).add(c);
+
+                a = a1;
+                b = b1;
+                c = c1;
+                d = d1;
+
+                if (c1.isZero()) {
+                    moreTerms = source.next();
+                    continue;
+                }
+                if (d1.isZero()) {
+                    moreTerms = source.next();
+                    continue;
+                }
+
+                LargeInt ac = a.divide(c);
+                LargeInt bd = b.divide(d);
+
+                if (ac.equals(bd)) {
+                    nextValue = ac;
+
+                    a1 = c;
+                    b1 = d;
+                    c1 = a.subtract(c.multiply(nextValue));
+                    d1 = b.subtract(d.multiply(nextValue));
+
+                    a = a1;
+                    b = b1;
+                    c = c1;
+                    d = d1;
+                    return true;
+                }
+                moreTerms = source.next();
+            }
+            // last term
+            nextValue = b;
+            return true;
+        }
+    }
+}
+
+
+
+/**
+ * Represents 4/π as a general continued fraction
+ */
+class PiUnder4 implements CFGeneralTerms {
+    private LargeInt index = LargeInt.ONE;
+
+    @Override
+    public LargeInt getOver() {
+        return index.multiply(index);
+    }
+
+    @Override
+    public LargeInt getLeft() {
+        return index.multiply(2).decrement();
+    }
+
+    @Override
+    public boolean next() {
+        index = index.increment();
+        return true;
+    }
+}
+
+/**
+ * source for terms of a general continued fraction
+ */
+interface CFGeneralTerms {
+
+    /**
+     * Get the "over" part of the current term.
+     * This should be called before the first call to {@code next()}
+     */
+    LargeInt getOver();
+
+    /**
+     * Get the "left" part of the current term.
+     * This should be called before the first call to {@code next()}
+     */
+    LargeInt getLeft();
+
+    /**
+     * Move to the next pair of terms. This should be called
+     * after consuming the first terms. Return false if no more
+     * terms in the set.
+     */
+    boolean next();
+}
+
+interface CFSimpleTerms {
+    /**
+     * Get the "left" part of the current term.
+     * This should be called before the first call to {@code next()}
+     */
+    LargeInt getLeft();
+
+    /**
+     * Move to the next pair of terms. This should be called
+     * after consuming the first terms. Return false if no more
+     * terms in the set.
+     */
+    boolean next();
+}
+
+/**
+ * source for repeating terms of a simple continued fraction
+ */
+interface CFSimpleTermMultiExpansion {
+    /**
+     * Number of terms remaining. Use {@code -1} for unknown or infinite
+     */
     long termCount();
 
-    /** Length of section that repeats. {@code 0} for no repeating section */
+    /**
+     * Number of terms before the repeating section. {@code 0} if the repeating
+     * section starts immediately
+     */
+    long prefixTerms();
+
+    /**
+     * Length of section that repeats. {@code 0} for no repeating section
+     */
     long repeatingTerms();
 
-    /** Give term i of the expansion. Starts at zero. */
+    /**
+     * Give term i of the expansion. Starts at zero.
+     */
     LargeInt term(long i);
 }
 
 /**
  * Continued fraction numbers.
- *
+ * <p>
  * See <a href="https://r-knott.surrey.ac.uk/Fibonacci/cfINTRO.html">Continued Fraction</a>
- * */
-public abstract class ContinuedFraction {
+ */
+abstract class ContinuedFraction_BITS {
     // These two are used differently depending on what mode we're in.
 
-    /** How to interpret this continued fraction */
+    /**
+     * How to interpret this continued fraction
+     */
     private final CfType _type;
 
-    /** Numerator terms. First is the integer part.
+    /**
+     * Numerator terms. First is the integer part.
      * If this runs out before {@code _under}, a stream of 1s is assumed.
-     *
+     * <p>
      * When both {@code _over} and {@code _under} are exhausted, we switch
      * to {@code _moreOver} and {@code _moreUnder} if they are supplied.
      */
     private final LargeIntVec _over;
 
-    /** Index {@code _over} returns to when repeating.
-     * {@code -1} means no repeating. */
+    /**
+     * Index {@code _over} returns to when repeating.
+     * {@code -1} means no repeating.
+     */
     private final int _overRepeat;
 
-    /** Denominator terms. Index 0 matches to {@code _over}'s index 1.
+    /**
+     * Denominator terms. Index 0 matches to {@code _over}'s index 1.
      * If this runs out before {@code _over}, a stream of 1s is assumed.
-     *
+     * <p>
      * When both {@code _over} and {@code _under} are exhausted, we switch
      * to {@code _moreOver} and {@code _moreUnder} if they are supplied.
      */
     private final LargeIntVec _under;
 
-    /** Index {@code _under} returns to when repeating.
-     * {@code -1} means no repeating. */
+    /**
+     * Index {@code _under} returns to when repeating.
+     * {@code -1} means no repeating.
+     */
     private final int _underRepeat;
 
-    /** Continued numerator terms. These can be infinite and/or repeating.
+    /**
+     * Continued numerator terms. These can be infinite and/or repeating.
      * The indexes should exactly match {@code _moreUnder}.
-     * If {@code null}, then this is a finite fraction. */
-    private final ITermExpansion _moreOver;
+     * If {@code null}, then this is a finite fraction.
+     */
+    private final CFSimpleTermMultiExpansion _moreOver;
 
-    /** Continued denominator terms. These can be infinite and/or repeating.
+    /**
+     * Continued denominator terms. These can be infinite and/or repeating.
      * The indexes should exactly match {@code _moveOver}.
-     * If {@code null}, then this is a finite fraction. */
-    private final ITermExpansion _moreUnder;
+     * If {@code null}, then this is a finite fraction.
+     */
+    private final CFSimpleTermMultiExpansion _moreUnder;
 
-    protected ContinuedFraction() {
+    protected ContinuedFraction_BITS() {
         _type = CfType.Zero;
         _over = null;
         _overRepeat = -1;
@@ -67,8 +257,10 @@ public abstract class ContinuedFraction {
         _moreUnder = null;
     }
 
-    /** return this + other */
-    public ContinuedFraction add(ContinuedFraction other){
+    /**
+     * return this + other
+     */
+    public ContinuedFraction_BITS add(ContinuedFraction_BITS other) {
         // TODO: implement
         return null;
     }
@@ -81,8 +273,10 @@ public abstract class ContinuedFraction {
 
     // Bunch of helper functions
 
-    /** 2x2 rational matrix multiply */
-    private static Fraction[] matMul(Fraction[] mat1, Fraction[] mat2){
+    /**
+     * 2x2 rational matrix multiply
+     */
+    private static Fraction[] matMul(Fraction[] mat1, Fraction[] mat2) {
         Fraction[] result = new Fraction[4];
 
         result[0] = mat1[0].multiply(mat2[0]).add(mat1[1].multiply(mat2[2])).simplify();
@@ -93,13 +287,13 @@ public abstract class ContinuedFraction {
         return result;
     }
 
-    private static Fraction fractionSimplify(Fraction frac, int ip){
+    private static Fraction fractionSimplify(Fraction frac, int ip) {
         LargeInt p = LargeInt.TEN.pow(ip);
         LargeInt pp = p.multiply(p);
         Fraction f = frac;
 
         boolean flip = false;
-        if ( ! f.isPositive()){ // negative or zero
+        if (!f.isPositive()) { // negative or zero
             f = f.negate();
             flip = true;
         }
@@ -110,22 +304,24 @@ public abstract class ContinuedFraction {
         return f;
     }
 
-    private static String toDecimalSpecialCase(ContinuedFraction cf, int precision){
+    private static String toDecimalSpecialCase(ContinuedFraction_BITS cf, int precision) {
         LargeInt tenP = LargeInt.TEN.pow(precision + 1);
         Fraction cmp = Fraction.fromVulgarFraction(LargeInt.ONE, tenP);
 
-        Fraction a = Fraction.fromVulgarFraction(1,1);
-        Fraction b = Fraction.fromVulgarFraction(0,1);
-        Fraction c = Fraction.fromVulgarFraction(0,1);
-        Fraction d = Fraction.fromVulgarFraction(1,1);
+        Fraction a = Fraction.fromVulgarFraction(1, 1);
+        Fraction b = Fraction.fromVulgarFraction(0, 1);
+        Fraction c = Fraction.fromVulgarFraction(0, 1);
+        Fraction d = Fraction.fromVulgarFraction(1, 1);
         boolean inPrecision = false;
         for (int i = 0; !inPrecision; i++) {
             Fraction newA = a.multiply(cf.element(i)).add(b);
             Fraction newC = c.multiply(cf.element(i)).add(d);
-            b=a;a=newA;
-            d=c;c=newC;
+            b = a;
+            a = newA;
+            d = c;
+            c = newC;
 
-            if (!c.isZero() && !d.isZero()){
+            if (!c.isZero() && !d.isZero()) {
                 Fraction test = a.divide(c).distance(b.divide(d));
                 inPrecision = test.compareTo(cmp) < 0;
             }
@@ -141,22 +337,29 @@ public abstract class ContinuedFraction {
     }
 
     private enum CfType {
-        /** CF has no terms and is equal to zero */
+        /**
+         * CF has no terms and is equal to zero
+         */
         Zero,
 
-        /** A simple finite continued fraction.
+        /**
+         * A simple finite continued fraction.
          * CF has a fixed number of 'under' terms and a single 'over' term.
-         * '_moreOver' and '_moreUnder' are not used. */
+         * '_moreOver' and '_moreUnder' are not used.
+         */
         Finite,
 
-        /** A simple repeating continued fraction.
+        /**
+         * A simple repeating continued fraction.
          * CF has a fixed number of '_under' terms and a single '_over' term.
          * Once '_under' is exhausted, it restarts at '_underRepeat'.
          * '_moreOver' and '_moreUnder' are not used.
          */
         Periodic,
 
-        /** A continued fraction based on generators */
+        /**
+         * A continued fraction based on generators
+         */
         Formula, FirstComposite,
         SecondComposite, SqrtComposite, Generalised
     }

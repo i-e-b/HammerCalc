@@ -312,6 +312,35 @@ public class LargeIntTest {
     }
 
     @Test
+    public void increment_adds_one(){
+        LargeInt a = new LargeInt("384626433832795028841971693993");
+        LargeInt b = new LargeInt("92307816406286208998628034825");
+        LargeInt c = new LargeInt("-92307816406286208998628034825");
+        LargeInt d = new LargeInt("-184615632812572417997256069650");
+
+
+        assertEquals("a++", "384626433832795028841971693994", a.increment().toString());
+        assertEquals("b++", "92307816406286208998628034826", b.increment().toString());
+        assertEquals("c++", "-92307816406286208998628034824", c.increment().toString());
+        assertEquals("d++", "-184615632812572417997256069649", d.increment().toString());
+    }
+
+
+    @Test
+    public void decrement_subtracts_one(){
+        LargeInt a = new LargeInt("384626433832795028841971693993");
+        LargeInt b = new LargeInt("92307816406286208998628034825");
+        LargeInt c = new LargeInt("-92307816406286208998628034825");
+        LargeInt d = new LargeInt("-184615632812572417997256069650");
+
+
+        assertEquals("a++", "384626433832795028841971693992", a.decrement().toString());
+        assertEquals("b++", "92307816406286208998628034824", b.decrement().toString());
+        assertEquals("c++", "-92307816406286208998628034826", c.decrement().toString());
+        assertEquals("d++", "-184615632812572417997256069651", d.decrement().toString());
+    }
+
+    @Test
     public void divide_gives_floor_of_quotient(){
         LargeInt a = new LargeInt("384626433832795028841971693993");
         LargeInt b = new LargeInt("92307816406286208998628034825");
