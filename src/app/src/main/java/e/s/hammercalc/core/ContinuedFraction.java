@@ -1,5 +1,17 @@
 package e.s.hammercalc.core;
 
+/** source for repeating terms of a continued fraction */
+interface ITermExpansion{
+    /** Number of terms remaining. Use {@code -1} for unknown or infinite */
+    long termCount();
+
+    /** Length of section that repeats. {@code 0} for no repeating section */
+    long repeatingTerms();
+
+    /** Give term i of the expansion. Starts at zero. */
+    LargeInt term(long i);
+}
+
 /**
  * Continued fraction numbers.
  *
@@ -7,10 +19,53 @@ package e.s.hammercalc.core;
  * */
 public abstract class ContinuedFraction {
     // These two are used differently depending on what mode we're in.
-    /*private final LargeIntVec _over = new LargeIntVec();
-    private final LargeIntVec _under = new LargeIntVec();
 
-    private final CfType _type;*/
+    /** How to interpret this continued fraction */
+    private final CfType _type;
+
+    /** Numerator terms. First is the integer part.
+     * If this runs out before {@code _under}, a stream of 1s is assumed.
+     *
+     * When both {@code _over} and {@code _under} are exhausted, we switch
+     * to {@code _moreOver} and {@code _moreUnder} if they are supplied.
+     */
+    private final LargeIntVec _over;
+
+    /** Index {@code _over} returns to when repeating.
+     * {@code -1} means no repeating. */
+    private final int _overRepeat;
+
+    /** Denominator terms. Index 0 matches to {@code _over}'s index 1.
+     * If this runs out before {@code _over}, a stream of 1s is assumed.
+     *
+     * When both {@code _over} and {@code _under} are exhausted, we switch
+     * to {@code _moreOver} and {@code _moreUnder} if they are supplied.
+     */
+    private final LargeIntVec _under;
+
+    /** Index {@code _under} returns to when repeating.
+     * {@code -1} means no repeating. */
+    private final int _underRepeat;
+
+    /** Continued numerator terms. These can be infinite and/or repeating.
+     * The indexes should exactly match {@code _moreUnder}.
+     * If {@code null}, then this is a finite fraction. */
+    private final ITermExpansion _moreOver;
+
+    /** Continued denominator terms. These can be infinite and/or repeating.
+     * The indexes should exactly match {@code _moveOver}.
+     * If {@code null}, then this is a finite fraction. */
+    private final ITermExpansion _moreUnder;
+
+    protected ContinuedFraction() {
+        _type = CfType.Zero;
+        _over = null;
+        _overRepeat = -1;
+        _under = null;
+        _underRepeat = -1;
+        _moreOver = null;
+        _moreUnder = null;
+    }
 
     /** return this + other */
     public ContinuedFraction add(ContinuedFraction other){
@@ -86,7 +141,23 @@ public abstract class ContinuedFraction {
     }
 
     private enum CfType {
-        Finite, Periodic, Formula, FirstComposite, SecondComposite,
-        SqrtComposite, Generalised
+        /** CF has no terms and is equal to zero */
+        Zero,
+
+        /** A simple finite continued fraction.
+         * CF has a fixed number of 'under' terms and a single 'over' term.
+         * '_moreOver' and '_moreUnder' are not used. */
+        Finite,
+
+        /** A simple repeating continued fraction.
+         * CF has a fixed number of '_under' terms and a single '_over' term.
+         * Once '_under' is exhausted, it restarts at '_underRepeat'.
+         * '_moreOver' and '_moreUnder' are not used.
+         */
+        Periodic,
+
+        /** A continued fraction based on generators */
+        Formula, FirstComposite,
+        SecondComposite, SqrtComposite, Generalised
     }
 }

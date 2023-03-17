@@ -51,8 +51,6 @@ public class LargeInt {
 
     /** Return a large int with the value of floor(f) */
     public static LargeInt fromFloat(double f){
-        //BigDecimal x = new BigDecimal(f);
-
         if (Double.isInfinite(f) || Double.isNaN(f)) return LARGE_NAN;
 
         // Translate the double into sign, exponent and significand, according

@@ -21,6 +21,8 @@ public class Fraction {
     public static final Fraction HALF = new Fraction(LargeInt.ONE,LargeInt.TWO);
     /** Fraction -1/2 */
     public static final Fraction NEG_HALF = new Fraction(LargeInt.NEG_ONE,LargeInt.TWO);
+    /** Fraction 0/0 */
+    public static final Fraction FRAC_NAN = new Fraction(LargeInt.ZERO,LargeInt.ZERO);
 
     protected Fraction(LargeInt num, LargeInt den){
         if (den.sign() < 0){
@@ -67,6 +69,38 @@ public class Fraction {
         return new Fraction(n, d);
     }
 
+    /** new fraction  */
+    public static Fraction fromFloat(double f){
+        if (Double.isInfinite(f) || Double.isNaN(f)) return FRAC_NAN;
+
+        // Translate the double into sign, exponent and significand, according
+        // to the formulae in JLS, Section 20.10.22.
+        long valBits = Double.doubleToLongBits(f);
+        int sign = ((valBits >> 63) == 0 ? 1 : -1);
+        int exponent = (int) ((valBits >> 52) & 0x7ffL);
+
+        long ft = 1L << 52;
+        long significand = (exponent == 0 ? (valBits & (ft - 1)) << 1 : (valBits & (ft - 1)) | ft);
+        exponent -= 1075;
+
+        // At this point, val == sign * significand * 2**exponent.
+
+        if (exponent >= 0) {
+            LargeInt exp = LargeInt.TWO.pow(exponent);
+            LargeInt a = LargeInt.fromInt(sign)
+                    .multiply(LargeInt.fromLong(significand))
+                    .multiply(exp);
+
+            return new Fraction(a, LargeInt.ONE).simplify();
+        } else {
+            LargeInt exp = LargeInt.TWO.pow(-exponent);
+            LargeInt a = LargeInt.fromInt(sign)
+                    .multiply(LargeInt.fromLong(significand));
+
+            return new Fraction(a, exp).simplify();
+        }
+    }
+
     /** return absolute value of this rational */
     public Fraction abs(){
         if (isPositive()) return this;
@@ -101,6 +135,16 @@ public class Fraction {
         LargeInt a = _num.multiply(val._den);
         LargeInt c = _den.multiply(val._num);
         return new Fraction(a, c);
+    }
+
+    /** return this % val */
+    public Fraction modulo(Fraction val){
+        // (a/b) % (c/d)  == (ad % bc)/bd
+        LargeInt ad = _num.multiply(val._den);
+        LargeInt bc = _den.multiply(val._num);
+        LargeInt bd = _den.multiply(val._den);
+
+        return new Fraction(ad.mod(bc),bd);
     }
 
     /** return (num/s)/(den/s) */
@@ -184,6 +228,11 @@ public class Fraction {
     @Override
     public int hashCode() {
         return _num.hashCode() ^ _den.hashCode();
+    }
+
+    /** Returns true if this rational is infinite or undefined */
+    public boolean isNaN(){
+        return _den.isZero();
     }
 
     /** return true if this rational is greater than zero */

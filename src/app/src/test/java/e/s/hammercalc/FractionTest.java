@@ -23,6 +23,26 @@ public class FractionTest {
     }
 
     @Test
+    public void can_create_a_fraction_from_a_float(){
+        // Carefully made to be exact doubles. With thanks to float.exposed
+        double a = 21870794818600898560.0;
+        String A = "21870794818600898560";
+
+        double b = 0.0000361821949101437501215;
+        String B = "5339549516259985/147573952589676412928";// "361821949101437501215/100000000000000000000000000", but reduced
+
+        double c = -19595179502422982656.0;
+        String C = "-19595179502422982656";
+
+        assertEquals("a", A, Fraction.fromFloat(a).toString());
+        assertEquals("b", B, Fraction.fromFloat(b).toString());
+        assertEquals("c", C, Fraction.fromFloat(c).toString());
+
+        assertTrue("NaN", Fraction.fromFloat(Double.NaN).isNaN());
+        assertFalse("not NaN", Fraction.fromFloat(b).isNaN());
+    }
+
+    @Test
     public void can_create_integer_rationals(){
         Fraction x = Fraction.fromInteger(LargeInt.TWO);
         Fraction y = Fraction.fromVulgarFraction(5,2);
@@ -151,6 +171,18 @@ public class FractionTest {
     }
 
     @Test
+    public void modulo_of_rationals(){
+        Fraction a = Fraction.fromVulgarFraction(24,2);
+        Fraction b = Fraction.fromVulgarFraction(9,10);
+        Fraction c = Fraction.fromVulgarFraction(1,1);
+
+        assertEquals("a % b", "3/10", a.modulo(b).toString());
+        assertEquals("a % c", "0", a.modulo(c).toString());
+        assertEquals("c % b", "1/10", c.modulo(b).toString());
+        assertEquals("b % c", "9/10", b.modulo(c).toString());
+    }
+
+    @Test
     public void can_handle_very_large_and_very_small_rationals(){
         Fraction a = Fraction.fromVulgarFraction(new LargeInt("724675358467671744377633"), new LargeInt("5"));
         Fraction b = Fraction.fromVulgarFraction(new LargeInt("11"), new LargeInt("859659751656285302520311"));
@@ -235,6 +267,16 @@ public class FractionTest {
         assertEquals("32/128", "1/4", b.simplify().toString());
         assertEquals("15360/7800", "128/65", c.simplify().toString());
         assertEquals("-675/297", "-25/11", d.simplify().toString());
+    }
+
+    @Test
+    public void can_reduce_rational_by_integer(){
+        Fraction a = Fraction.fromVulgarFraction(11,21);
+        Fraction aDiv3 = Fraction.fromVulgarFraction(11,63);
+        Fraction aReduce3 = Fraction.fromVulgarFraction(3, 7);
+
+        assertEquals("(33/63) / 3 (divide)", aDiv3, a.divide(Fraction.fromInteger(3)));
+        assertEquals("(floor(33/3))/(floor(63/3)) (reduce)", aReduce3, a.reduce(LargeInt.fromInt(3)));
     }
 
     @Test
