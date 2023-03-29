@@ -377,4 +377,23 @@ public class Fraction {
     public boolean overMagnitude(LargeInt mag) {
         return (_num.compareTo(mag) < 1) && (_den.compareTo(mag) < 1);
     }
+
+    /** Return the numerator of this fraction. 'n' from n/d. */
+    public LargeInt getNumerator() {
+        return _num;
+    }
+
+    /** Return the denominator of this fraction. 'd' from n/d. */
+    public LargeInt getDenominator() {
+        return _den;
+    }
+
+    /** floor(n / d) / (n % d);
+     * Return a new fraction, whose numerator is the integer quotient
+     * of the fraction, and whose denominator is the remainder. */
+    public LargeInt[] divMod() {
+        LargeInt[] bits = _num.divideAndRemainder(_den);
+        if (bits.length < 2) return new LargeInt[]{LargeInt.ZERO, LargeInt.ZERO};
+        return bits;
+    }
 }

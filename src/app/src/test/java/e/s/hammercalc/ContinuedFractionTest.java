@@ -109,4 +109,11 @@ public class ContinuedFractionTest {
 
         // better would be [3; 7, 15, 1, 292, 1 ...]
     }
+
+    @Test
+    public void rational_to_simple(){
+        ContinuedFraction cf1 = ContinuedFraction.fromRational(Fraction.fromVulgarFraction(97, 7));
+
+        assertEquals("97/7->", "13; 1, 6", cf1.toString());
+    }
 }

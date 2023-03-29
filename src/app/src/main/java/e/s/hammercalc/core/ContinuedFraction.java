@@ -5,6 +5,8 @@ package e.s.hammercalc.core;
 // This file is a mess, and probably will remain so while I am learning continued
 // fractions, with their various variants.
 // Nothing is here is likely to be "correct" unless covered by multiple tests.
+//
+// https://r-knott.surrey.ac.uk/Fibonacci/cfINTRO.html
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
 public class ContinuedFraction {
@@ -21,11 +23,41 @@ public class ContinuedFraction {
         _terms = terms;
     }
 
+    public static ContinuedFraction fromRational(Fraction f){
+        return new ContinuedFraction(new TermsFromRational(f));
+    }
+
     public CfSimplifier Simplify() {
         return new CfSimplifier(_terms);
     }
 
-    public class CfSimplifier implements CFSimpleTerms {
+    @SuppressWarnings("NullableProblems")
+    @Override
+    public String toString(){
+        StringBuilder sb = new StringBuilder();
+
+        int maxTerms = 50;
+        for (int i = 0; i < maxTerms; i++) {
+            LargeInt term = _terms.getLeft();
+            LargeInt over = _terms.getOver();
+
+            if (i == 1) sb.append("; ");
+            else if (i > 1) sb.append(", ");
+
+            if (over.equals(LargeInt.ONE)) {
+                sb.append(term.toString());
+            } else {
+                sb.append(over.toString());
+                sb.append('/');
+                sb.append(term.toString());
+            }
+
+            if (!_terms.next()) break;
+        }
+        return sb.toString();
+    }
+
+    public static class CfSimplifier implements CFSimpleTerms {
         LargeInt a, b, c, d, nextValue;
         CFGeneralTerms source;
         boolean moreTerms;
@@ -95,6 +127,102 @@ public class ContinuedFraction {
             // last term
             nextValue = b;
             return true;
+        }
+    }
+
+    private static class TermsFromRational implements CFGeneralTerms {
+        private Fraction _f;
+        private LargeInt[] _f2;
+        private int _state; // state machine. `-1` is terminate
+        private LargeInt _next;
+
+        public TermsFromRational(Fraction f) {
+            _f = f;
+            _state = 0;
+            next(); // run first time
+        }
+
+        @Override
+        public LargeInt getOver() {
+            return LargeInt.ONE;
+        }
+
+        @Override
+        public LargeInt getLeft() {
+            return _next;
+        }
+
+        @Override
+        public boolean next() {
+            if (_state < 0) return false;
+
+            if (_state == 0){
+                if (_f.getNumerator().equals(LargeInt.ZERO)){ // 0/d
+                    _next = LargeInt.ZERO;
+                    _state = -1;
+                    return true;
+                }
+                _state++;
+            }
+
+            if (_state == 1){
+                if (_f.getDenominator().equals(LargeInt.ZERO)){ // n/0
+                    _next = LargeInt.ZERO;
+                    _state = -2;
+                    return false;
+                }
+                _state++;
+            }
+
+            if (_state == 2){
+                if (_f.getDenominator().compareTo(_f.getNumerator()) > 0){ // [0..1)
+                    _next = LargeInt.ZERO;
+                    _f = _f.inverse();
+                    _state++;
+                    return true;
+                }
+                _state++;
+            }
+
+            // Main sequence loop, state=3
+            while (true) {
+                if (_state == 3) {
+                    _f2 = _f.divMod();
+
+                    if (_f2[1].equals(_f.getDenominator())) { // 1/1 or equivalent
+                        _next = _f2[0].add(LargeInt.ONE);
+                        _state = -1;
+                        return true;
+                    }
+                    _state++;
+                }
+
+                if (_state == 4) {
+                    if (_f2[0].isZero()) { // should have ended before
+                        _next = LargeInt.ZERO;
+                        _state = -1;
+                        return false;
+                    }
+                    _state++;
+                }
+
+                if (_state == 5) {
+                    _next = _f2[0];
+                    _state++;
+                    return true;
+                }
+
+                if (_state == 6) {
+                    if (_f2[1].isZero()){
+                        _next = LargeInt.ZERO;
+                        _state = -1;
+                        return false;
+                    }
+                }
+
+                _state = 3;
+                _f = new Fraction(_f2[1], _f2[0]);
+            }
         }
     }
 }

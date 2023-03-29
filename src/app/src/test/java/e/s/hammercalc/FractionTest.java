@@ -296,6 +296,21 @@ public class FractionTest {
     }
 
     @Test
+    public void can_divMod_a_fraction_into_itself(){
+        Fraction a = Fraction.fromVulgarFraction("859659751656285302520311", "3");
+        Fraction b = Fraction.fromVulgarFraction("859659751656285302520311", "618687072559368554063371");
+        Fraction c = Fraction.fromVulgarFraction("5", "483702679370754995920693");
+
+        LargeInt[] x = a.divMod();
+        LargeInt[] y = b.divMod();
+        LargeInt[] z = c.divMod();
+
+        assertEquals("a->x", "286553250552095100840103/2", x[0].toString()+"/"+x[1].toString());
+        assertEquals("b->y", "1/240972679096916748456940", y[0].toString()+"/"+y[1].toString());
+        assertEquals("c->z.n", "0/5", z[0].toString()+"/"+z[1].toString());
+    }
+
+    @Test
     public void rationals_can_be_approximated_to_floating_rationals(){
         Fraction a = Fraction.fromVulgarFraction("859659751656285302520311", "3");
         Fraction b = Fraction.fromVulgarFraction("859659751656285302520311", "618687072559368554063371");
