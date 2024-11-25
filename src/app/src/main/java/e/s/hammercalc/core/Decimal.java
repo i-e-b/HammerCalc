@@ -940,15 +940,39 @@ public class Decimal {
     }
 
     public int cmp(Decimal other) { // decimal.mjs#L242
-        // IEB: CONTINUE HERE
+        int xs = (int)this.s;
+        int ys = (int)other.s;
+
+        // Either NaN or ±Infinity?
         if (!this.isFinite() || !other.isFinite()) {
             if (this.isNaN() || other.isNaN()) return 0;
-            if (this.s != other.s) return (int) this.s;
+            if (xs != ys) return xs;
         }
 
-        // TODO
-        // IEB: TEMP
-        return 0;
+        // Either zero?
+        if (this.isZero() || other.isZero()){
+            if (!this.isZero()) return xs;
+            if (!other.isZero()) return -ys;
+            return 0;
+        }
+
+        // Signs differ?
+        if (xs != ys) return xs;
+
+        // Compare exponents.
+        if (this.e != other.e) return ((this.e > other.e) ^ (xs < 0)) ? 1 : -1;
+
+        // Compare digit by digit.
+        int xdL = this.d.length();
+        int ydL = other.d.length();
+        int i, j;
+        for (i = 0, j = Math.min(xdL, ydL); i < j; ++i) {
+            //if (this.d[i] !== other.d[i]) return this.d[i] > other.d[i] ^ xs < 0 ? 1 : -1;
+            if (this.d.get(i) != other.d.get(i)) return ((this.d.get(i) > other.d.get(i)) ^ (xs < 0)) ? 1 : -1;
+        }
+
+        // Compare lengths.
+        return xdL == ydL ? 0 : xdL > ydL ^ xs < 0 ? 1 : -1;
     }
 
     /**
@@ -962,7 +986,7 @@ public class Decimal {
      * Return true if decimal is invalid, false otherwise
      */
     public boolean isNaN() {
-        return (d == null || d.size() < 1) && Double.isNaN(s);
+        return (d == null || d.isEmpty()) && Double.isNaN(s);
     }
 
     /** Display the internal state of this Decimal */
